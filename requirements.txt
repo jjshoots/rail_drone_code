@@ -1,0 +1,7 @@
+torch
+jj-wingman
+numpy
+opencv-python
+matplotlib
+git+https://github.com/dronekit/dronekit-python
+pyserial

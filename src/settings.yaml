@@ -1,0 +1,37 @@
+# cv network parameters
+base_resize: [128, 128]
+in_channels: 3
+num_labels: 2
+inner_channels: [16, 16, 32, 32, 64]
+att_num_heads: 4
+num_att_module: 1
+num_ensemble: 1
+
+# rl network parameters
+act_size: 4
+obs_att_size: 8
+obs_img_size: [1, 128, 128]
+
+# wingman required params
+shutdown: false
+debug: false
+train: false
+evaluate: false
+display: false
+
+weights_directory: 'weights'
+version_number: null
+mark_number: 0
+log_status: false
+
+increment: false
+logging_interval: 1
+max_skips: 1
+greater_than: 0.0
+
+wandb: false
+wandb_name: ''
+wandb_notes: ''
+wandb_id: ''
+wandb_entity: 'jjshoots'
+wandb_project: 'temp_null'
