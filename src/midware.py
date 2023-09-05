@@ -116,7 +116,7 @@ class Midware:
             time.sleep(1)
 
         while self.vehicle.gps_0.fix_type and self.vehicle.gps_0.fix_type < 2:
-            print(f"Waiting for GPS...:, {self.vehicle.gps_0.fix_type}")
+            print(f"Waiting for GPS...: {self.vehicle.gps_0.fix_type}")
             time.sleep(1)
 
         print(f"Setting to guided mode...")

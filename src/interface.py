@@ -2,11 +2,15 @@ import time
 
 from midware import Midware
 
-drone = Midware("/dev/ttyACM0", 5)
+if __name__ == "__main__":
+    # connect to the drone
+    drone = Midware("/dev/ttyACM0", 4, 2)
+    time.sleep(1.0)
 
-time.sleep(1.0)
-
-while True:
-    drone.arm()
-    drone.set_guided()
-    drone.takeoff()
+    # arm, takeoff, land
+    while True:
+        drone.arm()
+        drone.set_guided()
+        drone.takeoff()
+        time.sleep(10.0)
+        drone.land()
