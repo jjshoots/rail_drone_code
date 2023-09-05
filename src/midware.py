@@ -3,44 +3,60 @@ import time
 
 import numpy as np
 from dronekit import VehicleMode, connect
+from pymavlink import mavutil
 
 
 class Midware:
     """Midware."""
 
-    def __init__(self, connection_string: str, update_rate: int) -> None:
+    def __init__(
+        self, connection_string: str, state_update_rate: int, setpoint_update_rate: int
+    ) -> None:
         """__init__.
 
         Args:
             connection_string (str): connection_string
-            update_rate (int): update_rate
+            state_update_rate (int): state_update_rate
+            setpoint_update_rate (int): setpoint_update_rate
 
         Returns:
             None:
         """
         self.vehicle = connect(connection_string, wait_ready=True)
 
-        # constants
-        self.update_time = 1.0 / update_rate
-        self.snap_limit = np.pi / self.update_time
+        """CONSTANTS"""
+        # rates
+        self.state_update_period = 1.0 / state_update_rate
+        self.setpoint_update_period = 1.0 / setpoint_update_rate
+
+        # conversions from enu to ned and back
+        self._frame_conversion = np.array([1.0, -1.0, -1.0, -1.0])
+        self.enu2ned = lambda x: x * self._frame_conversion
+        self.ned2enu = lambda x: x * self._frame_conversion
+
+        # parameters for the state updates
+        self._snap_limit = np.pi / self.state_update_period
+        self._deg_to_rad = np.pi / 180.0
 
         # get all parameters
         self.display_base_params()
 
-        # runtime parameters
+        """RUNTIME PARAMETERS"""
+        # a flag on whether we are able to fly autonomously
+        self.autonomous_enable = False
+
+        # parameters for state
         self._state_call_time = time.time()
         self._prev_ang_pos = np.zeros((3,), dtype=np.float32)
-        self.deg_to_rad = np.pi / 180.0
-
-        # start the state watchdog and its runtime variables
         self.ang_vel = np.zeros((3,), dtype=np.float32)
         self.lin_vel = np.zeros((3,), dtype=np.float32)
-        self._compute_state()
 
-        #Create a message listener using the decorator.
-        @self.vehicle.on_message("CONTROL_SYSTEM_STATE")
-        def listener(self, name, message):
-            print(message)
+        """START DAEMONS"""
+        self._state_update_daemon()
+        self._send_setpoint_daemon()
+
+        def __del__(self):
+            self.vehicle.close()
 
     def display_base_params(self):
         """Displays all the base params, usually called on init."""
@@ -69,6 +85,27 @@ class Midware:
         print(f"Armed: {self.vehicle.armed}")
         print("-----------------------------------------")
 
+    def arm(self) -> bool:
+        """Arms the quad.
+
+        Args:
+
+        Returns:
+            bool:
+        """
+        if not self.vehicle.is_armable:
+            print("Vehicle not armable!")
+            return False
+
+        print("Arming motors!")
+        self.vehicle.armed = True
+
+        while not self.vehicle.armed:
+            print(" Waiting for arming...")
+            time.sleep(1)
+
+        return True
+
     def set_guided(self):
         """Sets the drone to guided mode."""
         print("-----------------------------------------")
@@ -89,30 +126,99 @@ class Midware:
         print("Pre-arm checks done, guided mode set")
         print("-----------------------------------------")
 
-    def arm(self) -> bool:
-        """Arms the quad.
-
-        Args:
-
-        Returns:
-            bool:
-        """
-        if not self.vehicle.is_armable:
-            print("Vehicle not armable!")
-            return False
-
-        print("Arming motors!")
-        self.vehicle.mode = VehicleMode("GUIDED")
-        self.vehicle.armed = True
-
-        while not self.vehicle.armed:
-            print(" Waiting for arming...")
-            time.sleep(1)
-
         return True
 
-    def _compute_state(self):
-        """Computes the current state of the drone."""
+    def takeoff(self, height: float = 1.5):
+        """Sends the drone to a hover position.
+
+        Args:
+            height (float): height
+        """
+        if not self.vehicle.armed:
+            print("Vehicle is not armed, unable to perform auto-takeoff!")
+            return False
+        if self.vehicle.mode.name != "GUIDED":
+            print("Mode is not set to GUIDED, unable to perform auto-takeoff!")
+            return False
+
+        # run the takeoff command
+        self.vehicle.simple_takeoff(height)
+
+        # check that the drone has actually reached a stable hover
+        # we must maintain a stable hover for 3 seconds before we move on
+        step_count = 0
+        heights = np.zeros((3,), dtype=np.float32)
+        while True:
+            # treat the numpy array as a deque of sorts
+            heights[
+                step_count % heights.shape[0]
+            ] = self.vehicle.location.global_relative_frame.alt
+            step_count += 1
+
+            # if we've maintained with 5% of the target height for 3 seconds, break
+            if abs(np.mean(heights) - height) < abs(heights) * 0.05:
+                break
+
+            # otherwise just wait
+            time.sleep(1)
+
+        # flag that we can now do autonomous flight
+        self.autonomous_enable = True
+
+    def land(self):
+        # zero everything, disable autonomous mode
+        self.set_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
+        self.autonomous_enable = False
+
+        # send a land command
+        self.vehicle.mode = VehicleMode("LAND")
+
+        # check that the drone has indeed landed
+        while True:
+            height = self.vehicle.location.global_relative_frame.alt
+            if height is not None and height < 0.5:
+                break
+
+            # otherwise just wait
+            time.sleep(1)
+
+    def set_velocity_setpoint(self, frdy: np.ndarray):
+        """Sets a new velocity setpoint.
+
+        Args:
+            frdy (np.ndarray): frdy
+        """
+        setpoint = self.enu2ned(frdy)
+        self.setpoint_msg = self.vehicle.message_factory.send_ned_velocity(
+            # time_boot_ms (not used)
+            0,
+            # target system, target component
+            0,
+            0,
+            # frame
+            mavutil.mavlink.MAV_FRAME_BODY_FRD,
+            # type_mask, addressed in reversed, and used to indicate which components should be IGNORED
+            # bit1:PosX, bit2:PosY, bit3:PosZ, bit4:VelX, bit5:VelY, bit6:VelZ, bit7:AccX, bit8:AccY, bit9:AccZ, bit11:yaw, bit12:yaw rate
+            0b01111000111,
+            # x, y, z positions (not used)
+            0,
+            0,
+            0,
+            # x, y, z velocity in m/s
+            setpoint[0],
+            setpoint[1],
+            setpoint[2],
+            # x, y, z acceleration (not used)
+            0,
+            0,
+            0,
+            # yaw, yaw_rate (only yaw rate used)
+            0,
+            setpoint[3],
+        )
+
+    def _state_update_daemon(self):
+        """Updates state in a separate loop."""
         # record the current time
         elapsed = time.time() - self._state_call_time
         self._state_call_time = time.time()
@@ -128,10 +234,10 @@ class Midware:
                 -self.vehicle.attitude.yaw,
             ]
         )
-        self.ang_pos[(self.ang_pos - self._prev_ang_pos) > self.snap_limit] -= (
+        self.ang_pos[(self.ang_pos - self._prev_ang_pos) > self._snap_limit] -= (
             np.pi * 2.0 / elapsed
         )
-        self.ang_pos[(self.ang_pos - self._prev_ang_pos) < -self.snap_limit] += (
+        self.ang_pos[(self.ang_pos - self._prev_ang_pos) < -self._snap_limit] += (
             np.pi * 2.0 / elapsed
         )
 
@@ -153,4 +259,13 @@ class Midware:
         self.lin_vel[2] = -gps_vel[2]
 
         # queue the next call
-        threading.Timer(self.update_time, self._compute_state).start()
+        threading.Timer(self.state_update_period, self._state_update_daemon).start()
+
+    def _send_setpoint_daemon(self):
+        """Sends setpoints in a separate loop for autonomous mode."""
+        # send the setpoint if autonomy is allowed
+        if self.autonomous_enable:
+            self.vehicle.send_mavlink(self.setpoint_msg)
+
+        # queue the next call
+        threading.Timer(self.setpoint_update_period, self._state_update_daemon).start()

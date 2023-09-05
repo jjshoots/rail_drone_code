@@ -10,6 +10,7 @@ from wingman import Wingman, cpuize, gpuize, shutdown_handler
 from cv.att_unet import EnsembleAttUNet
 from rl.CCGE import GaussianActor
 
+
 def test(wm: Wingman):
     # grab the config
     cfg = wm.cfg
@@ -43,7 +44,11 @@ def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
         num_ensemble=cfg.num_ensemble,
     ).to(cfg.device)
 
-    rl_model = GaussianActor(act_size=cfg.act_size, obs_att_size=cfg.obs_att_size, obs_img_size=cfg.obs_img_size)
+    rl_model = GaussianActor(
+        act_size=cfg.act_size,
+        obs_att_size=cfg.obs_att_size,
+        obs_img_size=cfg.obs_img_size,
+    )
 
     # get weights for CV model
     cv_model.load_state_dict(torch.load("./weights/Version0/weights0.pth"))
@@ -52,7 +57,7 @@ def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
     rl_state_dict = rl_model.state_dict()
     for name, param in torch.load("./weights/Version0/weights0.path"):
         if name not in rl_state_dict:
-             continue
+            continue
         rl_state_dict[name].copy_(param)
 
     # to eval mode
