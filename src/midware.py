@@ -115,11 +115,15 @@ class Midware:
 
             # check that vehicle is armed and ready to go
             if not self.vehicle.armed:
-                print(f"Preflight: Vehicle not armed, please arm manually. Waiting for arming...")
+                print(
+                    f"Preflight: Vehicle not armed, please arm manually. Waiting for arming..."
+                )
                 check &= False
 
             if self.vehicle.mode.name != "GUIDED":
-                print(f"Preflight: Please set to GUIDED mode manually. Waiting for mode change...")
+                print(
+                    f"Preflight: Please set to GUIDED mode manually. Waiting for mode change..."
+                )
                 check &= False
 
             print("")
@@ -147,7 +151,9 @@ class Midware:
             self.vehicle.armed = False
             return False
         if self.vehicle.mode.name != "GUIDED":
-            print("Mode is not set to GUIDED, unable to perform auto-takeoff! Disarming!")
+            print(
+                "Mode is not set to GUIDED, unable to perform auto-takeoff! Disarming!"
+            )
             self.vehicle.armed = False
             return False
 
