@@ -38,8 +38,8 @@ class Midware:
         self._snap_limit = np.pi / self.state_update_period
         self._deg_to_rad = np.pi / 180.0
 
-        # get all parameters
-        self.display_base_params()
+        # set to stabilized mode first, then get all parameters
+        self.base_checks()
 
         """RUNTIME PARAMETERS"""
         # a flag on whether we are able to fly autonomously
@@ -58,21 +58,31 @@ class Midware:
         def __del__(self):
             self.vehicle.close()
 
-    def display_base_params(self):
+        ##Create a message listener using the decorator.
+        # @self.vehicle.on_message("GPS_RAW_INT")
+        # def listener(self, name, message):
+        #    print(message)
+
+    def base_checks(self):
         """Displays all the base params, usually called on init."""
+
+        if self.vehicle.mode.name != "STABILIZE":
+            print(f"Vehicle mode is {self.vehicle.mode.name}, setting to STABILIZE...")
+            self.vehicle.mode = VehicleMode("STABILIZE")
+
         # print(f"Autopilot capabilities (supports ftp): {self.vehicle.capabilities.ftp}")
         # print(f"Global Location: {self.vehicle.location.global_frame}")
         # print(f"Global Location (relative altitude): {self.vehicle.location.global_relative_frame}")
         # print(f"Local Location: {self.vehicle.location.local_frame}")
-        # print(f"Attitude: {self.vehicle.attitude}")
-        # print(f"Velocity: {self.vehicle.velocity}")
-        # print(f"GPS: {self.vehicle.gps_0}")
         # print(f"Gimbal status: {self.vehicle.gimbal}")
         # print(f"Heading: {self.vehicle.heading}")
         print("-----------------------------------------")
         print(f"Autopilot Firmware version: {self.vehicle.version}")
         print(f"Groundspeed: {self.vehicle.groundspeed}")
+        print(f"Velocity: {self.vehicle.velocity}")
         print(f"Airspeed: {self.vehicle.airspeed}")
+        print(f"GPS: {self.vehicle.gps_0}")
+        print(f"Attitude: {self.vehicle.attitude}")
         print(f"{self.vehicle.battery}")
         print(f"EKF OK?: {self.vehicle.ekf_ok}")
         print(f"Last Heartbeat: {self.vehicle.last_heartbeat}")
@@ -85,64 +95,64 @@ class Midware:
         print(f"Armed: {self.vehicle.armed}")
         print("-----------------------------------------")
 
-    def arm(self) -> bool:
-        """Arms the quad.
-
-        Args:
-
-        Returns:
-            bool:
-        """
-        if not self.vehicle.is_armable:
-            print("Vehicle not armable!")
-            return False
-
-        print("Arming motors!")
-        self.vehicle.armed = True
-
-        while not self.vehicle.armed:
-            print(" Waiting for arming...")
-            time.sleep(1)
-
-        return True
-
     def set_guided(self):
         """Sets the drone to guided mode."""
-        print("-----------------------------------------")
-        print("Performing pre-arm checks...")
+        print("Preflight: Performing pre-arm checks...\n")
 
         while self.vehicle.mode.name == "INITIALISING":
-            print("Waiting for vehicle to initialise...")
+            print("Preflight: Waiting for vehicle to initialise...")
             time.sleep(1)
 
-        while self.vehicle.gps_0.fix_type and self.vehicle.gps_0.fix_type < 2:
-            print(f"Waiting for GPS...: {self.vehicle.gps_0.fix_type}")
+        # preflight checks
+        while True:
             time.sleep(1)
+            check = True
 
-        print(f"Setting to guided mode...")
-        self.vehicle.mode = VehicleMode("GUIDED")
-        print(f"Mode set to {self.vehicle.mode}")
+            # check GPS sanity
+            if not self.vehicle.gps_0.fix_type or self.vehicle.gps_0.fix_type < 4:
+                print(f"Preflight: Waiting for GPS... {self.vehicle.gps_0}")
+                check &= False
 
-        print("Pre-arm checks done, guided mode set")
+            # check that vehicle is armed and ready to go
+            if not self.vehicle.armed:
+                print(f"Preflight: Vehicle not armed, please arm manually. Waiting for arming...")
+                check &= False
+
+            if self.vehicle.mode.name != "GUIDED":
+                print(f"Preflight: Please set to GUIDED mode manually. Waiting for mode change...")
+                check &= False
+
+            print("")
+            if check:
+                break
+
+        print(f"\nPreflight: Mode set to {self.vehicle.mode}, ready to rock and roll!")
+
+        print("-----------------------------------------")
+        for i in range(3, 0, -1):
+            print(f"Takeover in... {i}")
+            time.sleep(1)
         print("-----------------------------------------")
 
         return True
 
-    def takeoff(self, height: float = 1.5):
+    def takeoff(self, target_height: float = 1.5):
         """Sends the drone to a hover position.
 
         Args:
             height (float): height
         """
         if not self.vehicle.armed:
-            print("Vehicle is not armed, unable to perform auto-takeoff!")
+            print("Vehicle is not armed, unable to perform auto-takeoff! Disarming!")
+            self.vehicle.armed = False
             return False
         if self.vehicle.mode.name != "GUIDED":
-            print("Mode is not set to GUIDED, unable to perform auto-takeoff!")
+            print("Mode is not set to GUIDED, unable to perform auto-takeoff! Disarming!")
+            self.vehicle.armed = False
             return False
 
         # run the takeoff command
-        self.vehicle.simple_takeoff(height)
+        self.vehicle.simple_takeoff(target_height)
 
         # check that the drone has actually reached a stable hover
         # we must maintain a stable hover for 3 seconds before we move on
@@ -156,7 +166,7 @@ class Midware:
             step_count += 1
 
             # if we've maintained with 5% of the target height for 3 seconds, break
-            if abs(np.mean(heights) - height) < abs(heights) * 0.05:
+            if abs(np.mean(heights) - target_height) < abs(target_height) * 0.05:
                 break
 
             # otherwise just wait
@@ -189,7 +199,7 @@ class Midware:
             frdy (np.ndarray): frdy
         """
         setpoint = self.enu2ned(frdy)
-        self.setpoint_msg = self.vehicle.message_factory.send_ned_velocity(
+        self.setpoint_msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
             # time_boot_ms (not used)
             0,
             # target system, target component
@@ -259,7 +269,9 @@ class Midware:
         self.lin_vel[2] = -gps_vel[2]
 
         # queue the next call
-        threading.Timer(self.state_update_period, self._state_update_daemon).start()
+        t = threading.Timer(self.state_update_period, self._state_update_daemon)
+        t.daemon = True
+        t.start()
 
     def _send_setpoint_daemon(self):
         """Sends setpoints in a separate loop for autonomous mode."""
@@ -268,4 +280,6 @@ class Midware:
             self.vehicle.send_mavlink(self.setpoint_msg)
 
         # queue the next call
-        threading.Timer(self.setpoint_update_period, self._state_update_daemon).start()
+        t = threading.Timer(self.setpoint_update_period, self._state_update_daemon)
+        t.daemon = True
+        t.start()

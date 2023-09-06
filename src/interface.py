@@ -8,9 +8,7 @@ if __name__ == "__main__":
     time.sleep(1.0)
 
     # arm, takeoff, land
-    while True:
-        drone.arm()
-        drone.set_guided()
-        drone.takeoff()
-        time.sleep(10.0)
-        drone.land()
+    drone.set_guided()
+    drone.takeoff()
+    time.sleep(10.0)
+    drone.land()
