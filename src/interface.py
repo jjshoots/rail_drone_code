@@ -9,8 +9,13 @@ if __name__ == "__main__":
     )
     time.sleep(1.0)
 
-    # arm, takeoff, land
-    drone.preflight_setup()
-    drone.takeoff()
+    _ = input("Press ENTER to arm")
+    drone.vehicle.arm(True)
     time.sleep(10.0)
-    drone.land()
+    drone.vehicle.disarm(True)
+
+    # arm, takeoff, land
+    # drone.preflight_setup()
+    # drone.takeoff()
+    # time.sleep(10.0)
+    # drone.land()
