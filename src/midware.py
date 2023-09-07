@@ -10,7 +10,11 @@ class Midware:
     """Midware."""
 
     def __init__(
-        self, connection_string: str, state_update_rate: int, setpoint_update_rate: int, flight_ceiling: float
+        self,
+        connection_string: str,
+        state_update_rate: int,
+        setpoint_update_rate: int,
+        flight_ceiling: float,
     ) -> None:
         """__init__.
 
