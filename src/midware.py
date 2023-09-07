@@ -10,7 +10,7 @@ class Midware:
     """Midware."""
 
     def __init__(
-        self, connection_string: str, state_update_rate: int, setpoint_update_rate: int
+        self, connection_string: str, state_update_rate: int, setpoint_update_rate: int, flight_ceiling: float
     ) -> None:
         """__init__.
 
@@ -18,6 +18,7 @@ class Midware:
             connection_string (str): connection_string
             state_update_rate (int): state_update_rate
             setpoint_update_rate (int): setpoint_update_rate
+            flight_ceiling (float): flight ceiling in meters above takeoff point
 
         Returns:
             None:
@@ -37,6 +38,9 @@ class Midware:
         # parameters for the state updates
         self._snap_limit = np.pi / self.state_update_period
         self._deg_to_rad = np.pi / 180.0
+
+        # flight ceiling
+        self.flight_ceiling = flight_ceiling
 
         # set to stabilized mode first, then get all parameters
         self.base_checks()
@@ -202,6 +206,12 @@ class Midware:
             frdy (np.ndarray): frdy
         """
         setpoint = self.enu2ned(frdy)
+
+        # check the flight ceiling, downward is positive
+        vehicle_height = self.vehicle.location.global_relative_frame.alt
+        if vehicle_height > self.flight_ceiling:
+            setpoint[2] = min(vehicle_height - self.flight_ceiling, 1.0)
+
         self.setpoint_msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
             # time_boot_ms (not used)
             0,
