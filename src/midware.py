@@ -63,7 +63,7 @@ class Midware:
         # def listener(self, name, message):
         #    print(message)
 
-    def base_checks(self):
+    def base_checks(self) -> None:
         """Displays all the base params, usually called on init."""
 
         if self.vehicle.mode.name != "STABILIZE":
@@ -95,7 +95,7 @@ class Midware:
         print(f"Armed: {self.vehicle.armed}")
         print("-----------------------------------------")
 
-    def set_guided(self):
+    def preflight_setup(self) -> None:
         """Sets the drone to guided mode."""
         print("Preflight: Performing pre-arm checks...\n")
 
@@ -104,43 +104,40 @@ class Midware:
             time.sleep(1)
 
         # preflight checks
+        clear_time = 5
         while True:
             time.sleep(1)
-            check = True
 
             # check GPS sanity
             if not self.vehicle.gps_0.fix_type or self.vehicle.gps_0.fix_type < 4:
                 print(f"Preflight: Waiting for GPS... {self.vehicle.gps_0}")
-                check &= False
+                clear_time = 5
 
             # check that vehicle is armed and ready to go
             if not self.vehicle.armed:
                 print(
                     f"Preflight: Vehicle not armed, please arm manually. Waiting for arming..."
                 )
-                check &= False
+                clear_time = 5
 
             if self.vehicle.mode.name != "GUIDED":
                 print(
                     f"Preflight: Please set to GUIDED mode manually. Waiting for mode change..."
                 )
-                check &= False
+                clear_time = 5
 
+            # start counting down if all checks pass
             print("")
-            if check:
+            clear_time -= 1
+            if clear_time <= 3:
+                print(f"Takeover in... {clear_time}")
+            if clear_time == 0:
                 break
 
-        print(f"\nPreflight: Mode set to {self.vehicle.mode}, ready to rock and roll!")
-
-        print("-----------------------------------------")
-        for i in range(3, 0, -1):
-            print(f"Takeover in... {i}")
-            time.sleep(1)
+        print("\nPreflight: Ready to rock and roll!")
         print("-----------------------------------------")
 
-        return True
-
-    def takeoff(self, target_height: float = 1.5):
+    def takeoff(self, target_height: float = 1.5) -> None:
         """Sends the drone to a hover position.
 
         Args:
@@ -149,13 +146,13 @@ class Midware:
         if not self.vehicle.armed:
             print("Vehicle is not armed, unable to perform auto-takeoff! Disarming!")
             self.vehicle.armed = False
-            return False
+            return
         if self.vehicle.mode.name != "GUIDED":
             print(
                 "Mode is not set to GUIDED, unable to perform auto-takeoff! Disarming!"
             )
             self.vehicle.armed = False
-            return False
+            return
 
         # run the takeoff command
         self.vehicle.simple_takeoff(target_height)
@@ -181,7 +178,7 @@ class Midware:
         # flag that we can now do autonomous flight
         self.autonomous_enable = True
 
-    def land(self):
+    def land(self) -> None:
         # zero everything, disable autonomous mode
         self.set_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
         self.autonomous_enable = False
@@ -198,7 +195,7 @@ class Midware:
             # otherwise just wait
             time.sleep(1)
 
-    def set_velocity_setpoint(self, frdy: np.ndarray):
+    def set_velocity_setpoint(self, frdy: np.ndarray) -> None:
         """Sets a new velocity setpoint.
 
         Args:
@@ -233,7 +230,7 @@ class Midware:
             setpoint[3],
         )
 
-    def _state_update_daemon(self):
+    def _state_update_daemon(self) -> None:
         """Updates state in a separate loop."""
         # record the current time
         elapsed = time.time() - self._state_call_time
@@ -279,7 +276,7 @@ class Midware:
         t.daemon = True
         t.start()
 
-    def _send_setpoint_daemon(self):
+    def _send_setpoint_daemon(self) -> None:
         """Sends setpoints in a separate loop for autonomous mode."""
         # send the setpoint if autonomy is allowed
         if self.autonomous_enable:
