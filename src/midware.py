@@ -73,8 +73,6 @@ class Midware:
 
     def terminate(self, *_):
         self.vehicle.close()
-        exit()
-        print("Ctrl-C invoked!")
 
     def base_checks(self) -> None:
         """Displays all the base params, usually called on init."""
