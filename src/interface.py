@@ -18,7 +18,7 @@ if __name__ == "__main__":
     )
 
     # handle terminate handlers
-    terminate_hooks.append(drone.terminate)
+    terminate_hooks.append(drone.__del__())
     signal.signal(signal.SIGINT, terminate_handler)
 
     time.sleep(1.0)

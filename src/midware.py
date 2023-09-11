@@ -71,9 +71,6 @@ class Midware:
     def __del__(self):
         self.vehicle.close()
 
-    def terminate(self, *_):
-        self.vehicle.close()
-
     def base_checks(self) -> None:
         """Displays all the base params, usually called on init."""
 
