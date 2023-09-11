@@ -63,9 +63,6 @@ class Midware:
         self._state_update_daemon()
         self._send_setpoint_daemon()
 
-        def __del__(self):
-            self.vehicle.close()
-
         ##Create a message listener using the decorator.
         # @self.vehicle.on_message("GPS_RAW_INT")
         # def listener(self, name, message):
@@ -73,6 +70,10 @@ class Midware:
 
     def __del__(self):
         self.vehicle.close()
+
+    def terminate(self, *_):
+        self.vehicle.close()
+        print("Ctrl-C invoked!")
 
     def base_checks(self) -> None:
         """Displays all the base params, usually called on init."""
