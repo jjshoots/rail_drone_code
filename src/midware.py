@@ -73,6 +73,7 @@ class Midware:
 
     def terminate(self, *_):
         self.vehicle.close()
+        exit()
         print("Ctrl-C invoked!")
 
     def base_checks(self) -> None:
