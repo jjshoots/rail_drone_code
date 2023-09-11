@@ -4,12 +4,12 @@ import time
 from midware import Midware
 
 # handler for all the ctrl-c logic
-terminal_hooks = []
+terminate_hooks = []
 def terminate_handler(*_):
     print("Crtl-C invoked!")
-    for hook in terminal_hooks:
+    for hook in terminate_hooks:
         hook()
-    exit()
+    exit(1)
 
 if __name__ == "__main__":
     # connect to the drone
@@ -18,8 +18,8 @@ if __name__ == "__main__":
     )
 
     # handle terminate handlers
-    terminal_hooks.append(drone.terminate)
-    signal.signal(signal.SIGINT, drone.terminate)
+    terminate_hooks.append(drone.terminate)
+    signal.signal(signal.SIGINT, terminate_handler)
 
     time.sleep(1.0)
 
