@@ -71,6 +71,9 @@ class Midware:
         # def listener(self, name, message):
         #    print(message)
 
+    def __del__(self):
+        self.vehicle.close()
+
     def base_checks(self) -> None:
         """Displays all the base params, usually called on init."""
 
