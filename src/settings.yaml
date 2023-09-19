@@ -1,5 +1,6 @@
 # cv network parameters
-base_resize: [64, 64]
+# base_resize: [64, 64]
+base_resize: [640, 640]
 in_channels: 3
 num_labels: 2
 inner_channels: [16, 16, 32, 64]
