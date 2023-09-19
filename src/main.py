@@ -39,7 +39,7 @@ def deploy(wm: Wingman):
         obs_att = gpuize(obs_att, cfg.device)
 
         # pass segmap to the rl model to get action, send to cpu
-        action = rl_model.infer(*rl_model(obs_att, seg_map))
+        action = rl_model.infer(*rl_model(obs_att, seg_map)).squeeze(0)
         action = cpuize(action)
 
         # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
