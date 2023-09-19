@@ -6,8 +6,8 @@ from dronekit import VehicleMode, connect
 from pymavlink import mavutil
 
 
-class Midware:
-    """Midware."""
+class Vehicle:
+    """Vehicle."""
 
     def __init__(
         self,

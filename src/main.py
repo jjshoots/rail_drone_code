@@ -6,20 +6,24 @@ from signal import SIGINT, signal
 import torch
 from wingman import Wingman, cpuize, gpuize, shutdown_handler
 
-from camera import Camera
-from cv.att_unet import EnsembleAttUNet
-from rl.CCGENet import GaussianActor
+from cv import EnsembleAttUNet
+from midware import Camera, Vehicle
+from rl import GaussianActor
 
 
-def test(wm: Wingman):
+def deploy(wm: Wingman):
     # grab the config
     cfg = wm.cfg
 
-    # setup models
+    # setup models, camera, midware
     cv_model, rl_model = setup_nets(wm)
-
-    # setup the camera
     camera = Camera(cfg.base_resize)
+    vehicle = Vehicle(
+        "/dev/ttyACM0",
+        state_update_rate=4,
+        setpoint_update_rate=2,
+        flight_ceiling=5.0,
+    )
 
     for cam_img in camera.stream(cfg.device):
         # pass image through the cv model
@@ -51,15 +55,15 @@ def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
         obs_img_size=cfg.obs_img_size,
     )
 
-    # # get weights for CV model
-    # cv_model.load_state_dict(torch.load("./weights/Version0/weights0.pth"))
+    # get weights for CV model
+    cv_model.load_state_dict(torch.load("./weights/Version0/weights0.pth"))
 
-    # # get weights for RL model
-    # rl_state_dict = rl_model.state_dict()
-    # for name, param in torch.load("./weights/Version0/weights0.path"):
-    #     if name not in rl_state_dict:
-    #         continue
-    #     rl_state_dict[name].copy_(param)
+    # get weights for RL model
+    rl_state_dict = rl_model.state_dict()
+    for name, param in torch.load("./weights/Version0/weights0.path"):
+        if name not in rl_state_dict:
+            continue
+        rl_state_dict[name].copy_(param)
 
     # to eval mode
     cv_model.eval()
@@ -78,4 +82,4 @@ if __name__ == "__main__":
 
     """ SCRIPTS HERE """
     with torch.no_grad():
-        test(wm)
+        deploy(wm)

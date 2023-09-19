@@ -3,15 +3,15 @@ import time
 import cv2
 from wingman import Wingman
 
-from camera import Camera
-from midware import Midware
+from midware.camera import Camera
+from midware.vehicle import Vehicle
 
 if __name__ == "__main__":
     wm = Wingman(config_yaml="src/settings.yaml")
 
     if False:
         # connect to the drone
-        drone = Midware(
+        drone = Vehicle(
             "/dev/ttyACM0",
             state_update_rate=4,
             setpoint_update_rate=2,
