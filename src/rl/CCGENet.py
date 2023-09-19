@@ -74,6 +74,10 @@ class Actor(nn.Module):
         # pass things through the backbone
         att_output, img_output = self.backbone_net(obs_att, obs_img)
 
+        print(att_output.shape)
+        print(img_output.shape)
+        exit()
+
         # concatenate the stuff together and get the action
         output = torch.cat([att_output, img_output], dim=-1)
         output = self.merge_net(output).reshape(*obs_att.shape[:-1], 2, self.act_size)
