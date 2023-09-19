@@ -278,7 +278,7 @@ class Vehicle:
         # store variables for next timestep
         self._prev_ang_pos = self.ang_pos.copy()
 
-        # read linear velocity and rotate to body frame
+        # read linear velocity and rotate to body frame in ENU coordinates
         gps_vel = np.array(self.vehicle.velocity)
         c, s = np.cos(self.ang_pos[-1]), np.sin(self.ang_pos[-1])
         self.lin_vel[0] = gps_vel[0] * c - gps_vel[1] * s

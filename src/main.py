@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from signal import SIGINT, signal
 
+import numpy as np
 import torch
 from wingman import Wingman, cpuize, gpuize, shutdown_handler
 
@@ -18,22 +19,35 @@ def deploy(wm: Wingman):
     # setup models, camera, midware
     cv_model, rl_model = setup_nets(wm)
     camera = Camera(cfg.base_resize)
-    # vehicle = Vehicle(
-    #     "/dev/ttyACM0",
-    #     state_update_rate=4,
-    #     setpoint_update_rate=2,
-    #     flight_ceiling=5.0,
-    # )
+    vehicle = Vehicle(
+        "/dev/ttyACM0",
+        state_update_rate=4,
+        setpoint_update_rate=2,
+        flight_ceiling=5.0,
+    )
 
+    # start loop
+    action = np.zeros((4,), dtype=np.float32)
+    action_scaling = np.array([1.0, 2.0, 2.0, 2.0])
     for cam_img in camera.stream(cfg.device):
-        # pass image through the cv model
+        # get the camera image and pass segmentation model, already on gpu
         seg_map, _ = cv_model(cam_img)
         seg_map = seg_map.float()
 
-        # pass segmap to the rl model
-        obs_att = torch.zeros((1, 8), device=cfg.device)
+        # get the vehicle's attitude, send to gpu
+        obs_att = torch.tensor([*vehicle.lin_vel, vehicle.altitude, *action])
+        obs_att = gpuize(obs_att, cfg.device)
+
+        # pass segmap to the rl model to get action, send to cpu
         action = rl_model.infer(*rl_model(obs_att, seg_map))
-        print(action)
+        action = cpuize(action)
+
+        # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
+        # the max linear velocity as defined in the sim is 3.0
+        # the max angular velocity as defined in the sim is pi
+        setpoint = np.array([action[0] > 0, -action[1], -action[3], -action[2]])
+        vehicle.set_velocity_setpoint(setpoint * action_scaling)
+        print(setpoint)
 
 
 def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
