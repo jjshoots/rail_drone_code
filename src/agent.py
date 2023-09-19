@@ -34,7 +34,7 @@ class Agent:
         """RUNTIME PARAMETERS"""
         self.last_zmq_update = 0.0
         self.setpoint = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
-        self.obs_att = torch.zeros((8,), dtype=torch.float32, device=self.cfg.device)
+        self.obs_att = torch.zeros((1, 8), dtype=torch.float32, device=self.cfg.device)
         self.action = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
 
         """CONSTANTS"""
