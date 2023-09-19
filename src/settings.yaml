@@ -21,7 +21,7 @@ evaluate: false
 display: false
 
 weights_directory: 'weights'
-version_number: null
+version_number: 0
 mark_number: 0
 log_status: false
 
