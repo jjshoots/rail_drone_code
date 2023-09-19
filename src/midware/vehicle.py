@@ -334,9 +334,10 @@ class Vehicle:
         t.start()
 
     def _zmq_update_watcher(self):
-        """A watchdog for the ZMQ updates."""
+        """A watchdog for the ZMQ updates. Resets the setpoint if stale."""
         stale_time = (time.time() - self.last_zmq_update)
         if stale_time > 3.0:
+            self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
             print(f"Setpoint update stale for {stale_time} seconds.")
 
         # queue the next call
