@@ -25,9 +25,9 @@ if __name__ == "__main__":
         time.sleep(10.0)
         drone.land()
 
-    camera = Camera(wm.cfg.base_resize)
-
-    for image in camera.stream(wm.device):
-        cv2.imshow("something", image)
-        # cv2.imshow("something", obs["rgba_img"])
-        cv2.waitKey(1)
+    if False:
+        camera = Camera(wm.cfg.base_resize)
+        for image in camera.stream(wm.device):
+            cv2.imshow("something", image)
+            # cv2.imshow("something", obs["rgba_img"])
+            cv2.waitKey(1)
