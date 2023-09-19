@@ -8,7 +8,7 @@ from wingman import Wingman, cpuize, gpuize, shutdown_handler
 
 from camera import Camera
 from cv.att_unet import EnsembleAttUNet
-from rl.CCGE import GaussianActor
+from rl.CCGENet import GaussianActor
 
 
 def test(wm: Wingman):

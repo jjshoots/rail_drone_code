@@ -1,6 +1,7 @@
 import torch
+import torch.distributions as dist
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as func
 from wingman import NeuralBlocks
 
 
@@ -22,7 +23,7 @@ class Backbone(nn.Module):
         )
 
         # process the visual input
-        _channels_description = [obs_img_size[0], 16, 32, 64, embedding_size // 4]
+        _channels_description = [obs_img_size[0], 16, 32, 64, embedding_size // 16]
         _kernels_description = [3] * (len(_channels_description) - 1)
         _pooling_description = [2] * (len(_channels_description) - 1)
         _activation_description = ["relu"] * (len(_channels_description) - 1)
@@ -44,7 +45,7 @@ class Backbone(nn.Module):
         return att_output, img_output
 
 
-class Actor(nn.Module):
+class GaussianActor(nn.Module):
     """
     Actor network
     """
@@ -74,10 +75,6 @@ class Actor(nn.Module):
         # pass things through the backbone
         att_output, img_output = self.backbone_net(obs_att, obs_img)
 
-        print(att_output.shape)
-        print(img_output.shape)
-        exit()
-
         # concatenate the stuff together and get the action
         output = torch.cat([att_output, img_output], dim=-1)
         output = self.merge_net(output).reshape(*obs_att.shape[:-1], 2, self.act_size)
@@ -86,3 +83,27 @@ class Actor(nn.Module):
             output = output.moveaxis(-2, 0)
 
         return output
+
+    @staticmethod
+    def sample(mu, sigma):
+        """
+        output:
+            actions is of shape B x act_size
+            entropies is of shape B x 1
+        """
+        # lower bound sigma and bias it
+        normals = dist.Normal(mu, func.softplus(sigma) + 1e-6)
+
+        # sample from dist
+        mu_samples = normals.rsample()
+        actions = torch.tanh(mu_samples)
+
+        # calculate log_probs
+        log_probs = normals.log_prob(mu_samples) - torch.log(1 - actions.pow(2) + 1e-6)
+        log_probs = log_probs.sum(dim=-1, keepdim=True)
+
+        return actions, log_probs
+
+    @staticmethod
+    def infer(mu, sigma):
+        return torch.tanh(mu)
