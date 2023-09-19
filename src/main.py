@@ -26,9 +26,6 @@ def test(wm: Wingman):
         seg_map, _ = cv_model(cam_img)
         seg_map = seg_map.float()
 
-        print(seg_map.shape)
-        exit()
-
         # pass segmap to the rl model
         obs_att = torch.zeros((1, 8), device=cfg.device)
         action = rl_model.infer(*rl_model(obs_att, seg_map))
