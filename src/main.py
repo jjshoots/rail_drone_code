@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+
 from midware.vehicle import Vehicle
 
 if __name__ == "__main__":

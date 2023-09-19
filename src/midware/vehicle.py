@@ -2,9 +2,10 @@ import threading
 import time
 
 import numpy as np
+import zmq
 from dronekit import VehicleMode, connect
 from pymavlink import mavutil
-import zmq
+
 
 class Vehicle:
     """Vehicle.
@@ -64,6 +65,9 @@ class Vehicle:
         self.ang_vel = np.zeros((3,), dtype=np.float32)
         self.lin_vel = np.zeros((3,), dtype=np.float32)
 
+        # zmq last update
+        self.last_zmq_update = np.inf
+
         """PYZMQ SOCKETS"""
         # attitude publisher
         self.attitude = dict()
@@ -80,11 +84,7 @@ class Vehicle:
         """START DAEMONS"""
         self._state_update_daemon()
         self._send_setpoint_daemon()
-
-        ##Create a message listener using the decorator.
-        # @self.vehicle.on_message("GPS_RAW_INT")
-        # def listener(self, name, message):
-        #    print(message)
+        self._zmq_update_watcher()
 
     def __del__(self):
         self.vehicle.close()
@@ -321,6 +321,7 @@ class Vehicle:
             # update the setpoint if we have a message
             try:
                 setpoint = self.set_sub.recv_pyobj(flags=zmq.NOBLOCK)
+                self.last_zmq_update = time.time()
                 self.update_velocity_setpoint(setpoint)
             except zmq.Again:
                 pass
@@ -329,5 +330,16 @@ class Vehicle:
 
         # queue the next call
         t = threading.Timer(self.setpoint_update_period, self._state_update_daemon)
+        t.daemon = True
+        t.start()
+
+    def _zmq_update_watcher(self):
+        """A watchdog for the ZMQ updates."""
+        stale_time = (time.time() - self.last_zmq_update) / 1000.0
+        if stale_time > 3.0:
+            print(f"Setpoint update stale for {stale_time} seconds.")
+
+        # queue the next call
+        t = threading.Timer(1.0, self._zmq_update_watcher)
         t.daemon = True
         t.start()
