@@ -148,7 +148,7 @@ class Agent:
         print(self.setpoint)
 
         # check the zmq
-        stale_time = (time.time() - self.last_zmq_update)
+        stale_time = time.time() - self.last_zmq_update
         if stale_time > 3.0:
             print(f"Attitude estimate stale for {stale_time} seconds.")
 

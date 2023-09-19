@@ -345,13 +345,13 @@ class Vehicle:
             self.vehicle.send_mavlink(self.setpoint_msg)
 
         # queue the next call
-        t = threading.Timer(self.setpoint_update_period, self._state_update_daemon)
+        t = threading.Timer(self.setpoint_update_period, self._send_setpoint_daemon)
         t.daemon = True
         t.start()
 
     def _zmq_update_watcher(self) -> None:
         """A watchdog for the ZMQ updates. Resets the setpoint if stale."""
-        stale_time = (time.time() - self.last_zmq_update)
+        stale_time = time.time() - self.last_zmq_update
         if stale_time > 3.0:
             self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
             print(f"Setpoint update stale for {stale_time} seconds.")
