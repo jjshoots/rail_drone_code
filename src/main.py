@@ -69,15 +69,16 @@ def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
         obs_img_size=cfg.obs_img_size,
     )
 
-    # get weights for CV model
-    cv_model.load_state_dict(torch.load("./weights/Version0/weights0.pth"))
+    if False:
+        # get weights for CV model
+        cv_model.load_state_dict(torch.load("./weights/Version0/weights0.pth"))
 
-    # get weights for RL model
-    rl_state_dict = rl_model.state_dict()
-    for name, param in torch.load("./weights/Version0/weights0.path"):
-        if name not in rl_state_dict:
-            continue
-        rl_state_dict[name].copy_(param)
+        # get weights for RL model
+        rl_state_dict = rl_model.state_dict()
+        for name, param in torch.load("./weights/Version0/weights0.path"):
+            if name not in rl_state_dict:
+                continue
+            rl_state_dict[name].copy_(param)
 
     # to eval mode
     cv_model.eval()
