@@ -335,7 +335,7 @@ class Vehicle:
 
     def _zmq_update_watcher(self):
         """A watchdog for the ZMQ updates."""
-        stale_time = (time.time() - self.last_zmq_update) / 1000.0
+        stale_time = (time.time() - self.last_zmq_update)
         if stale_time > 3.0:
             print(f"Setpoint update stale for {stale_time} seconds.")
 
