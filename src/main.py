@@ -7,6 +7,7 @@ import matplotlib
 import torch
 from wingman import Wingman, cpuize, gpuize, shutdown_handler
 
+from camera import Camera
 from cv.att_unet import EnsembleAttUNet
 from rl.CCGE import GaussianActor
 
@@ -18,9 +19,10 @@ def test(wm: Wingman):
     # setup models
     cv_model, rl_model = setup_nets(wm)
 
-    while True:
-        cam_img = torch.zeros((1, 3, 128, 128), device=cfg.device)
+    # setup the camera
+    camera = Camera(cfg.base_resize)
 
+    for cam_img in camera.stream(cfg.device):
         # pass image through the cv model
         seg_map, _ = cv_model(cam_img)
         seg_map = seg_map.float()
@@ -80,11 +82,5 @@ if __name__ == "__main__":
     wm = Wingman(config_yaml="src/settings.yaml")
 
     """ SCRIPTS HERE """
-
     with torch.no_grad():
         test(wm)
-
-    """ SCRIPTS END """
-
-    if wm.cfg.shutdown:
-        os.system("poweroff")
