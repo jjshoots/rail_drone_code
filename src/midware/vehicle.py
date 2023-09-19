@@ -4,10 +4,15 @@ import time
 import numpy as np
 from dronekit import VehicleMode, connect
 from pymavlink import mavutil
-
+import zmq
 
 class Vehicle:
-    """Vehicle."""
+    """Vehicle.
+
+    The vehicle interface.
+    It publishes the vehicle attitude on port 5555.
+    It subscribes get vehicle setpoints by subscribing to port 5556.
+    """
 
     def __init__(
         self,
@@ -58,6 +63,19 @@ class Vehicle:
         self._prev_ang_pos = np.zeros((3,), dtype=np.float32)
         self.ang_vel = np.zeros((3,), dtype=np.float32)
         self.lin_vel = np.zeros((3,), dtype=np.float32)
+
+        """PYZMQ SOCKETS"""
+        # attitude publisher
+        self.attitude = dict()
+        context = zmq.Context()
+        self.att_pub = context.socket(zmq.PUB)
+        self.att_pub.bind("tcp://127.0.0.1:5555")
+
+        # setpoint subscriber
+        context = zmq.Context()
+        self.set_sub = context.socket(zmq.SUB)
+        self.set_sub.bind("tcp://127.0.0.1:5556")
+        self.set_sub.setsockopt_string(zmq.SUBSCRIBE, "")
 
         """START DAEMONS"""
         self._state_update_daemon()
@@ -188,7 +206,7 @@ class Vehicle:
 
     def land(self) -> None:
         # zero everything, disable autonomous mode
-        self.set_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
+        self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
         self.autonomous_enable = False
 
         # send a land command
@@ -203,7 +221,7 @@ class Vehicle:
             # otherwise just wait
             time.sleep(1)
 
-    def set_velocity_setpoint(self, frdy: np.ndarray) -> None:
+    def update_velocity_setpoint(self, frdy: np.ndarray) -> None:
         """Sets a new velocity setpoint.
 
         Args:
@@ -285,6 +303,12 @@ class Vehicle:
         self.lin_vel[1] = -gps_vel[0] * s - gps_vel[1] * c
         self.lin_vel[2] = -gps_vel[2]
 
+        # publish the attitude to zmq
+        self.attitude["lin_vel"] = self.lin_vel
+        self.attitude["ang_vel"] = self.lin_vel
+        self.attitude["height"] = self.altitude
+        self.att_pub.send_pyobj(self.attitude)
+
         # queue the next call
         t = threading.Timer(self.state_update_period, self._state_update_daemon)
         t.daemon = True
@@ -294,6 +318,13 @@ class Vehicle:
         """Sends setpoints in a separate loop for autonomous mode."""
         # send the setpoint if autonomy is allowed
         if self.autonomous_enable:
+            # update the setpoint if we have a message
+            try:
+                setpoint = self.set_sub.recv_pyobj(flags=zmq.NOBLOCK)
+                self.update_velocity_setpoint(setpoint)
+            except zmq.Again:
+                pass
+
             self.vehicle.send_mavlink(self.setpoint_msg)
 
         # queue the next call

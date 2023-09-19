@@ -8,3 +8,4 @@ git+https://github.com/dronekit/dronekit-python
 pyserial
 prefetch-generator
 tqdm
+pyzmq
