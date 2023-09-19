@@ -29,18 +29,25 @@ class Camera:
                 camera = cv2.VideoCapture(-1)
                 continue
 
-            image = self.normalize(
-                gpuize(
-                    torch.tensor(
-                        cv2.resize(
-                            cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
-                            [self.base_resize[1], self.base_resize[0]],
-                        ).transpose((2, 0, 1)),
-                        dtype=torch.float32,
-                    ).unsqueeze(0),
-                    device,
-                )
+            # perform opencv formatting first
+            image = cv2.flip(
+                cv2.resize(
+                    cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
+                    [self.base_resize[1], self.base_resize[0]],
+                ),
+                0,
             )
+
+            # convert to torch understandable
+            # image = self.normalize(
+            #     gpuize(
+            #         torch.tensor(
+            #             image.transpose((2, 0, 1)),
+            #             dtype=torch.float32,
+            #         ).unsqueeze(0),
+            #         device,
+            #     )
+            # )
 
             yield image
 

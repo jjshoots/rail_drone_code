@@ -1,5 +1,6 @@
 import time
 
+import cv2
 from wingman import Wingman
 
 from camera import Camera
@@ -27,8 +28,6 @@ if __name__ == "__main__":
     camera = Camera(wm.cfg.base_resize)
 
     for image in camera.stream(wm.device):
-        print(image.shape)
-        print(image.max())
-        print(image.min())
-        print(image.device)
-        exit(1)
+        cv2.imshow("something", image)
+        # cv2.imshow("something", obs["rgba_img"])
+        cv2.waitKey(1)
