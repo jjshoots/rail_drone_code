@@ -18,12 +18,12 @@ def deploy(wm: Wingman):
     # setup models, camera, midware
     cv_model, rl_model = setup_nets(wm)
     camera = Camera(cfg.base_resize)
-    vehicle = Vehicle(
-        "/dev/ttyACM0",
-        state_update_rate=4,
-        setpoint_update_rate=2,
-        flight_ceiling=5.0,
-    )
+    # vehicle = Vehicle(
+    #     "/dev/ttyACM0",
+    #     state_update_rate=4,
+    #     setpoint_update_rate=2,
+    #     flight_ceiling=5.0,
+    # )
 
     for cam_img in camera.stream(cfg.device):
         # pass image through the cv model
