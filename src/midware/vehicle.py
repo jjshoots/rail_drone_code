@@ -57,7 +57,7 @@ class Vehicle:
 
         """RUNTIME PARAMETERS"""
         # a flag on whether we are able to fly autonomously
-        self.autonomous_enable = False
+        self.autonomous = False
 
         # parameters for state
         self._state_call_time = time.time()
@@ -87,6 +87,8 @@ class Vehicle:
         self._zmq_update_watcher()
 
     def __del__(self):
+        """__del__.
+        """
         self.vehicle.close()
 
     def base_checks(self) -> None:
@@ -163,6 +165,16 @@ class Vehicle:
         print("\nPreflight: Ready to rock and roll!")
         print("-----------------------------------------")
 
+    def enable_autonomous(self, enable: bool) -> None:
+        """Enables autonomous flight.
+
+        Args:
+
+        Returns:
+            None:
+        """
+        self.autonomous = enable
+
     def takeoff(self, target_height: float = 1.5) -> None:
         """Sends the drone to a hover position.
 
@@ -201,13 +213,17 @@ class Vehicle:
             # otherwise just wait
             time.sleep(1)
 
-        # flag that we can now do autonomous flight
-        self.autonomous_enable = True
-
     def land(self) -> None:
+        """land.
+
+        Args:
+
+        Returns:
+            None:
+        """
         # zero everything, disable autonomous mode
         self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
-        self.autonomous_enable = False
+        self.autonomous = False
 
         # send a land command
         self.vehicle.mode = VehicleMode("LAND")
@@ -316,16 +332,16 @@ class Vehicle:
 
     def _send_setpoint_daemon(self) -> None:
         """Sends setpoints in a separate loop for autonomous mode."""
-        # send the setpoint if autonomy is allowed
-        if self.autonomous_enable:
-            # update the setpoint if we have a message
-            try:
-                setpoint = self.set_sub.recv_pyobj(flags=zmq.NOBLOCK)
-                self.last_zmq_update = time.time()
-                self.update_velocity_setpoint(setpoint)
-            except zmq.Again:
-                pass
+        # update the setpoint if we have a message
+        try:
+            setpoint = self.set_sub.recv_pyobj(flags=zmq.NOBLOCK)
+            self.last_zmq_update = time.time()
+            self.update_velocity_setpoint(setpoint)
+        except zmq.Again:
+            pass
 
+        # send the setpoint if autonomy is allowed
+        if self.autonomous:
             self.vehicle.send_mavlink(self.setpoint_msg)
 
         # queue the next call
@@ -333,7 +349,7 @@ class Vehicle:
         t.daemon = True
         t.start()
 
-    def _zmq_update_watcher(self):
+    def _zmq_update_watcher(self) -> None:
         """A watchdog for the ZMQ updates. Resets the setpoint if stale."""
         stale_time = (time.time() - self.last_zmq_update)
         if stale_time > 3.0:

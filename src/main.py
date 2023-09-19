@@ -14,8 +14,20 @@ if __name__ == "__main__":
     )
     time.sleep(1.0)
 
-    # arm, takeoff, land
+    # arm, takeoff
     drone.preflight_setup()
     drone.takeoff()
-    time.sleep(10.0)
+
+    # count down
+    for i in range(5):
+        print(f"Going autonomous in {5 - i}...")
+        time.sleep(1.0)
+
+    # enable autonomous mode
+    drone.enable_autonomous(True)
+
+    # now we wait
+    while True:
+        time.sleep(100)
+
     drone.land()

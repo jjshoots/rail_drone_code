@@ -100,7 +100,7 @@ class Agent:
 
         return cv_model, rl_model
 
-    def _update_obs_att(self):
+    def _update_obs_att(self) -> None:
         """Reads the vehicle attitude from ZMQ and converts it into a form that's compatible with the RL alg."""
         # check whether we have state update
         try:
@@ -115,7 +115,7 @@ class Agent:
         )
         return
 
-    def start(self):
+    def start(self) -> None:
         """The main blocking loop."""
         # start loop, just go as fast as possible for now
         for cam_img in self.camera.stream(self.cfg.device):
@@ -143,7 +143,7 @@ class Agent:
             # publish the setpoint
             self.set_pub.send_pyobj(self.setpoint)
 
-    def _zmq_update_watcher(self):
+    def _zmq_update_watcher(self) -> None:
         """A watchdog for the ZMQ updates. Also periodically prints out the setpoint."""
         print(self.setpoint)
 
