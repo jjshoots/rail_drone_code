@@ -32,7 +32,7 @@ class Camera:
             # perform opencv formatting first
             image = cv2.flip(
                 cv2.resize(
-                    image,
+                    cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
                     [self.base_resize[1], self.base_resize[0]],
                 ),
                 0,
