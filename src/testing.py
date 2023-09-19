@@ -7,9 +7,8 @@ from midware.camera import Camera
 from midware.vehicle import Vehicle
 
 if __name__ == "__main__":
-    wm = Wingman(config_yaml="src/settings.yaml")
 
-    if False:
+    if True:
         # connect to the drone
         drone = Vehicle(
             "/dev/ttyACM0",
@@ -26,6 +25,7 @@ if __name__ == "__main__":
         drone.land()
 
     if False:
+        wm = Wingman(config_yaml="src/settings.yaml")
         camera = Camera(wm.cfg.base_resize)
         for image in camera.stream(wm.device):
             cv2.imshow("something", image)
