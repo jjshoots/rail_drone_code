@@ -145,7 +145,7 @@ class Agent:
 
     def _zmq_update_watcher(self) -> None:
         """A watchdog for the ZMQ updates. Also periodically prints out the setpoint."""
-        print(self.setpoint)
+        print(f"[go, right_drift, yaw_rate, climb_rate]: {self.setpoint}")
 
         # check the zmq
         stale_time = time.time() - self.last_zmq_update
