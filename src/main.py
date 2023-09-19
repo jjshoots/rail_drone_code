@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from signal import SIGINT, signal
 
-import matplotlib
 import torch
 from wingman import Wingman, cpuize, gpuize, shutdown_handler
 
@@ -74,10 +73,6 @@ def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
 
 
 if __name__ == "__main__":
-    try:
-        matplotlib.use("TKAgg")
-    except Exception as e:
-        print(f"Unable to change mpl backend, are you on headless? {e}")
     signal(SIGINT, shutdown_handler)
     wm = Wingman(config_yaml="src/settings.yaml")
 
