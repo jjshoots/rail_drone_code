@@ -78,7 +78,7 @@ class Vehicle:
         # setpoint subscriber
         context = zmq.Context()
         self.set_sub = context.socket(zmq.SUB)
-        self.set_sub.bind("tcp://127.0.0.1:5556")
+        self.set_sub.connect("tcp://127.0.0.1:5556")
         self.set_sub.setsockopt_string(zmq.SUBSCRIBE, "")
 
         """START DAEMONS"""

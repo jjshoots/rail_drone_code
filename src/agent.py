@@ -44,7 +44,7 @@ class Agent:
         # attitude subscriber
         context = zmq.Context()
         self.att_sub = context.socket(zmq.SUB)
-        self.att_sub.bind("tcp://127.0.0.1:5555")
+        self.att_sub.connect("tcp://127.0.0.1:5555")
         self.att_sub.setsockopt_string(zmq.SUBSCRIBE, "")
 
         # setpoint publisher
