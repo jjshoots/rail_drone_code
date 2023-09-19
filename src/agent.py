@@ -32,7 +32,8 @@ class Agent:
         self.camera = Camera(self.cfg.base_resize)
 
         """RUNTIME PARAMETERS"""
-        self.last_zmq_update = 0
+        self.last_zmq_update = np.inf
+        self.setpoint = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
         self.obs_att = np.zeros((4,), dtype=np.float32)
         self.action = np.zeros((4,), dtype=np.float32)
 
