@@ -24,8 +24,11 @@ if __name__ == "__main__":
         time.sleep(10.0)
         drone.land()
 
-    camera = Camera(64)
+    camera = Camera(wm.cfg.base_resize)
 
     for image in camera.stream(wm.device):
         print(image.shape)
+        print(image.max())
+        print(image.min())
+        print(image.device)
         exit(1)
