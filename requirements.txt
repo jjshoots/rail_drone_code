@@ -1,7 +1,10 @@
 torch
+torchvision
 jj-wingman
 numpy
 opencv-python
 matplotlib
 git+https://github.com/dronekit/dronekit-python
 pyserial
+prefetch-generator
+tqdm
