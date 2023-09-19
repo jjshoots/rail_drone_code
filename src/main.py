@@ -29,6 +29,7 @@ def test(wm: Wingman):
         # pass segmap to the rl model
         obs_att = torch.zeros((1, 8), device=cfg.device)
         action = rl_model.infer(*rl_model(obs_att, seg_map))
+        print(action)
 
 
 def setup_nets(wm: Wingman) -> tuple[EnsembleAttUNet, GaussianActor]:
