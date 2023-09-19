@@ -306,7 +306,7 @@ class Vehicle:
         # publish the attitude to zmq
         self.attitude["lin_vel"] = self.lin_vel
         self.attitude["ang_vel"] = self.lin_vel
-        self.attitude["height"] = self.altitude
+        self.attitude["altitude"] = self.altitude
         self.att_pub.send_pyobj(self.attitude)
 
         # queue the next call
