@@ -1,1 +1,1 @@
-from CCGENet import GaussianActor
+from .CCGENet import GaussianActor
