@@ -10,7 +10,7 @@ num_ensemble: 1
 # rl network parameters
 act_size: 4
 obs_att_size: 8
-obs_img_size: [1, 128, 128]
+obs_img_size: [2, 128, 128]
 
 # wingman required params
 shutdown: false
