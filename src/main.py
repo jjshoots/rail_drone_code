@@ -45,7 +45,7 @@ def deploy(wm: Wingman):
         # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
         # the max linear velocity as defined in the sim is 3.0
         # the max angular velocity as defined in the sim is pi
-        setpoint = np.array([action[0] > 0, -action[1], -action[3], -action[2]])
+        setpoint = np.array([[action[0] > 0, -action[1], -action[3], -action[2]]])
         vehicle.set_velocity_setpoint(setpoint * action_scaling)
         print(setpoint)
 
