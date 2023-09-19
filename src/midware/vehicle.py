@@ -66,7 +66,7 @@ class Vehicle:
         self.lin_vel = np.zeros((3,), dtype=np.float32)
 
         # zmq last update
-        self.last_zmq_update = np.inf
+        self.last_zmq_update = 0.0
 
         """PYZMQ SOCKETS"""
         # attitude publisher
