@@ -39,15 +39,15 @@ class Camera:
             )
 
             # convert to torch understandable
-            # image = self.normalize(
-            #     gpuize(
-            #         torch.tensor(
-            #             image.transpose((2, 0, 1)),
-            #             dtype=torch.float32,
-            #         ).unsqueeze(0),
-            #         device,
-            #     )
-            # )
+            image = self.normalize(
+                gpuize(
+                    torch.tensor(
+                        image.transpose((2, 0, 1)),
+                        dtype=torch.float32,
+                    ).unsqueeze(0),
+                    device,
+                )
+            )
 
             yield image
 
