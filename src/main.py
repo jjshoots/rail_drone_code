@@ -1,3 +1,8 @@
+"""
+Middleware for all autonomous flights.
+This script is not meant to be run standalone and will fail if there are no setpoints.
+"""
+
 from __future__ import annotations
 
 import time
@@ -12,22 +17,22 @@ if __name__ == "__main__":
         setpoint_update_rate=2,
         flight_ceiling=5.0,
     )
-    time.sleep(1.0)
 
     # arm, takeoff
     drone.preflight_setup()
     drone.takeoff()
 
-    # count down
-    for i in range(5):
-        print(f"Going autonomous in {5 - i}...")
-        time.sleep(1.0)
-
     # enable autonomous mode
+    while input("Start autonomous? (y/n)") != "y":
+        time.sleep(1)
     drone.enable_autonomous(True)
 
     # now we wait
-    while True:
-        time.sleep(100)
+    print("Press any key to terminate...")
+    try:
+        while True:
+            time.sleep(100)
+    except KeyboardInterrupt:
+        pass
 
     drone.land()

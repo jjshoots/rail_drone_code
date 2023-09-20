@@ -86,9 +86,11 @@ class Vehicle:
         self._send_setpoint_daemon()
         self._zmq_update_watcher()
 
+        # some sleep helps
+        time.sleep(1)
+
     def __del__(self):
-        """__del__.
-        """
+        """__del__."""
         self.vehicle.close()
 
     def base_checks(self) -> None:

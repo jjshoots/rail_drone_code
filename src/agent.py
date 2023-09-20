@@ -1,3 +1,8 @@
+"""
+Supervisor level script for sending setpoints generated from the CVRL model.
+This script requires `main.py` to first be run in another process.
+"""
+
 from __future__ import annotations
 
 import threading
@@ -22,7 +27,13 @@ class Agent:
     None of the functions are designed to be called after `start()`, which is a blocking loop.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        forward_velocity: float = 1.0,
+        max_drift_velocity: float = 2.0,
+        max_climb_rate: float = 2.0,
+        max_yaw_rate: float = 2.0,
+    ):
         """__init__."""
         self.wm = Wingman(config_yaml="src/settings.yaml")
         self.cfg = self.wm.cfg
@@ -38,7 +49,9 @@ class Agent:
         self.action = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
 
         """CONSTANTS"""
-        self.action_scaling = np.array([1.0, 2.0, 2.0, 2.0])
+        self.action_scaling = np.array(
+            [forward_velocity, max_drift_velocity, max_yaw_rate, max_climb_rate]
+        )
 
         """PYZMQ SOCKETS"""
         # attitude subscriber
