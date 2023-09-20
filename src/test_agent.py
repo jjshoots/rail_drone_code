@@ -6,12 +6,11 @@ This script requires `main.py` to first be run in another process.
 from __future__ import annotations
 
 import os
-import threading
-import time
+from typing import Generator
 
+import cv2
 import numpy as np
 import torch
-import zmq
 from wingman import Wingman, cpuize, gpuize
 
 from cv import EnsembleAttUNet
@@ -41,7 +40,6 @@ class Agent:
 
         """MODELS AND CAMERA"""
         self.cv_model, self.rl_model = self._setup_nets()
-        self.camera = Camera(self.cfg.base_resize)
 
         """RUNTIME PARAMETERS"""
         self.last_zmq_update = 0.0
@@ -53,21 +51,6 @@ class Agent:
         self.action_scaling = np.array(
             [forward_velocity, max_drift_velocity, max_yaw_rate, max_climb_rate]
         )
-
-        """PYZMQ SOCKETS"""
-        # attitude subscriber
-        context = zmq.Context()
-        self.att_sub = context.socket(zmq.SUB)
-        self.att_sub.connect("tcp://127.0.0.1:5555")
-        self.att_sub.setsockopt_string(zmq.SUBSCRIBE, "")
-
-        # setpoint publisher
-        context = zmq.Context()
-        self.set_pub = context.socket(zmq.PUB)
-        self.set_pub.bind("tcp://127.0.0.1:5556")
-
-        """START THE ZMQ WATCHDOG"""
-        self._zmq_update_watcher()
 
     def _setup_nets(self) -> tuple[EnsembleAttUNet, GaussianActor]:
         """_setup_nets.
@@ -119,26 +102,37 @@ class Agent:
         return cv_model, rl_model
 
     def _update_obs_att(self) -> None:
-        """Reads the vehicle attitude from ZMQ and converts it into a form that's compatible with the RL alg."""
-        # check whether we have state update
-        try:
-            attitude = self.att_sub.recv_pyobj(flags=zmq.NOBLOCK)
-            self.last_zmq_update = time.time()
-        except zmq.Again:
-            return
+        self.obs_att = torch.rand((1, 8), dtype=torch.float32, device=self.cfg.device)
+        self.obs_att -= 0.5 * 0.5
+        self.obs_att[:, 3] = 1.0
 
-        self.obs_att = torch.tensor(
-            [[*attitude["lin_vel"], attitude["altitude"], *self.action]],
-            device=self.cfg.device,
+    def read_image(self) -> Generator[torch.Tensor | np.ndarray, None, None]:
+        file_path = os.path.dirname(os.path.realpath(__file__))
+        images_path = os.path.join(
+            file_path, "../../active_learning/datasets/RailwayCVRLV0/train/images"
         )
-        return
+        for file in os.listdir(images_path):
+            # have to read np array and apply preprocessors
+            image = cv2.imread(os.path.join(images_path, file))
+            image = cv2.resize(image, self.cfg.base_resize)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.flip(image, 0)
+
+            # fix dimensions and normalize
+            image = torch.tensor(
+                image.transpose((2, 0, 1)), dtype=torch.float32, device=self.cfg.device
+            )
+            image = Camera.normalize(image)
+            image = image.unsqueeze(0)
+
+            yield image
 
     def start(self) -> None:
         """The main blocking loop."""
         # start loop, just go as fast as possible for now
-        for cam_img in self.camera.stream(self.cfg.device):
+        for image in self.read_image():
             # get the camera image and pass to segmentation model, already on gpu
-            seg_map, _ = self.cv_model(cam_img)
+            seg_map, _ = self.cv_model(image)
             seg_map = seg_map.float()
 
             # update the obs_att
@@ -158,22 +152,11 @@ class Agent:
             )
             self.setpoint *= self.action_scaling
 
-            # publish the setpoint
-            self.set_pub.send_pyobj(self.setpoint)
+            print(f"FRDY: {self.setpoint}")
 
-    def _zmq_update_watcher(self) -> None:
-        """A watchdog for the ZMQ updates. Also periodically prints out the setpoint."""
-        print(f"Setpoint FRDY: {self.setpoint}")
-
-        # check the zmq
-        stale_time = time.time() - self.last_zmq_update
-        if stale_time > 3.0:
-            print(f"Attitude estimate stale for {stale_time} seconds.")
-
-        # queue the next call
-        t = threading.Timer(1.0, self._zmq_update_watcher)
-        t.daemon = True
-        t.start()
+            # cv2.imshow("something", cpuize(((image + 1.0) / 2.0).squeeze()).transpose(1, 2, 0))
+            cv2.imshow("something", cpuize(seg_map.squeeze()[0]))
+            cv2.waitKey(10000)
 
 
 if __name__ == "__main__":

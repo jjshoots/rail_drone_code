@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import time
+from typing import Generator
 
 import cv2
+import numpy as np
 import torch
 from prefetch_generator import prefetch
 from wingman import gpuize
@@ -13,7 +15,7 @@ class Camera:
         self.base_resize = base_resize
 
     @prefetch(max_prefetch=2)
-    def stream(self, device):
+    def stream(self, device) -> Generator[torch.Tensor, None, None]:
         camera = cv2.VideoCapture(-1)
         print("Camera Initialized")
 
@@ -48,7 +50,8 @@ class Camera:
 
             yield image
 
-    def normalize(self, data):
+    @staticmethod
+    def normalize(data) -> np.ndarray | torch.Tensor:
         """normalize.
 
         Args:
@@ -57,7 +60,8 @@ class Camera:
         data = (data.float() - 128.0) / 128.0
         return data
 
-    def denormalize(self, data):
+    @staticmethod
+    def denormalize(data) -> np.ndarray | torch.Tensor:
         """denormalize.
 
         Args:
