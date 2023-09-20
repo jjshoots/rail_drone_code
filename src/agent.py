@@ -5,6 +5,7 @@ This script requires `main.py` to first be run in another process.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 
@@ -92,10 +93,13 @@ class Agent:
             obs_img_size=self.cfg.obs_img_size,
         )
 
-        if False:
-            # get weights for CV model
-            cv_model.load_state_dict(torch.load("./weights/Version0/weights0.pth"))
+        # get weights for CV model
+        file_path = os.path.dirname(os.path.realpath(__file__))
+        cv_model.load_state_dict(
+            torch.load(os.path.join(file_path, "../cv_weights.pth"))
+        )
 
+        if False:
             # get weights for RL model
             rl_state_dict = rl_model.state_dict()
             for name, param in torch.load("./weights/Version0/weights0.path"):
