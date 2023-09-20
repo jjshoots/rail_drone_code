@@ -177,6 +177,9 @@ class Vehicle:
         """
         self.autonomous = enable
 
+        if not enable:
+            self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
+
     def takeoff(self, target_height: float = 1.5) -> None:
         """Sends the drone to a hover position.
 

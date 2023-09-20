@@ -24,15 +24,18 @@ if __name__ == "__main__":
 
     # enable autonomous mode
     while input("Start autonomous? (y/n)") != "y":
-        time.sleep(1)
+        pass
     drone.enable_autonomous(True)
 
-    # now we wait
-    print("Press any key to terminate...")
+    # now we wait for the terminate
+    print("Press Ctrl-C to terminate...")
     try:
         while True:
             time.sleep(100)
     except KeyboardInterrupt:
-        pass
+        drone.enable_autonomous(False)
 
+    # check for land
+    while input("Land? (y/n)") != "y":
+        pass
     drone.land()

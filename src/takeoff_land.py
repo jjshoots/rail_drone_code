@@ -21,5 +21,5 @@ if __name__ == "__main__":
 
     # check for land requirement
     while input("Land? (y/n)") != "y":
-        time.sleep(1)
+        pass
     drone.land()
