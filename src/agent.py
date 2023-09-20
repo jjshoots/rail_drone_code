@@ -99,13 +99,12 @@ class Agent:
             torch.load(os.path.join(file_path, "../cv_weights.pth"))
         )
 
-        if False:
-            # get weights for RL model
-            rl_state_dict = rl_model.state_dict()
-            for name, param in torch.load("./weights/Version0/weights0.path"):
-                if name not in rl_state_dict:
-                    continue
-                rl_state_dict[name].copy_(param)
+        # get weights for RL model
+        rl_state_dict = rl_model.state_dict()
+        for name, param in torch.load(os.path.join(file_path, "../rl_weights.pth")):
+            if name not in rl_state_dict:
+                continue
+            rl_state_dict[name].copy_(param)
 
         # to eval mode
         cv_model.eval()
