@@ -9,6 +9,7 @@ import os
 from typing import Generator
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from wingman import Wingman, cpuize, gpuize
@@ -49,7 +50,7 @@ class Agent:
 
         """CONSTANTS"""
         self.action_scaling = np.array(
-            [forward_velocity, max_drift_velocity, max_yaw_rate, max_climb_rate]
+            [forward_velocity, max_drift_velocity, max_climb_rate, max_yaw_rate]
         )
 
     def _setup_nets(self) -> tuple[EnsembleAttUNet, GaussianActor]:
@@ -87,9 +88,9 @@ class Agent:
         for name, param in torch.load(
             os.path.join(file_path, "../rl_weights.pth")
         ).items():
-            if name not in rl_state_dict:
+            if "actor." not in name:
                 continue
-            rl_state_dict[name].copy_(param)
+            rl_state_dict[name.replace("actor.", "")].copy_(param)
 
         # to eval mode
         cv_model.eval()
@@ -144,7 +145,7 @@ class Agent:
             ).squeeze(0)
             self.action = cpuize(self.action)
 
-            # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
+            # map action, [stop/go, left_drift, yaw_rate, climb_rate] -> [frdy]
             # the max linear velocity as defined in the sim is 3.0
             # the max angular velocity as defined in the sim is pi
             self.setpoint = np.array(
@@ -155,8 +156,8 @@ class Agent:
             print(f"FRDY: {self.setpoint}")
 
             # cv2.imshow("something", cpuize(((image + 1.0) / 2.0).squeeze()).transpose(1, 2, 0))
-            cv2.imshow("something", cpuize(seg_map.squeeze()[0]))
-            cv2.waitKey(10000)
+            plt.imshow(cpuize(seg_map.squeeze()[0]))
+            plt.show()
 
 
 if __name__ == "__main__":

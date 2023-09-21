@@ -20,6 +20,7 @@ class Vehicle:
         connection_string: str,
         state_update_rate: int,
         setpoint_update_rate: int,
+        flight_floor: float,
         flight_ceiling: float,
     ) -> None:
         """__init__.
@@ -50,6 +51,7 @@ class Vehicle:
         self._deg_to_rad = np.pi / 180.0
 
         # flight ceiling
+        self.flight_floor = flight_floor
         self.flight_ceiling = flight_ceiling
 
         # set to stabilized mode first, then get all parameters
@@ -254,6 +256,8 @@ class Vehicle:
         vehicle_height = self.vehicle.location.global_relative_frame.alt
         if vehicle_height > self.flight_ceiling:
             setpoint[2] = min(vehicle_height - self.flight_ceiling, 1.0)
+        elif vehicle_height < self.flight_floor:
+            setpoint[2] = max(vehicle_height - self.flight_floor, -1.0)
 
         self.setpoint_msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
             # time_boot_ms (not used)

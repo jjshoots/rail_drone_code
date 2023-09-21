@@ -104,9 +104,9 @@ class Agent:
         for name, param in torch.load(
             os.path.join(file_path, "../rl_weights.pth")
         ).items():
-            if name not in rl_state_dict:
+            if "actor." not in name:
                 continue
-            rl_state_dict[name].copy_(param)
+            rl_state_dict[name.replace("actor.", "")].copy_(param)
 
         # to eval mode
         cv_model.eval()
