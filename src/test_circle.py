@@ -22,9 +22,13 @@ if __name__ == "__main__":
     att_sub.connect("tcp://127.0.0.1:5555")
     att_sub.setsockopt_string(zmq.SUBSCRIBE, "")
 
+    altitude = 2.0
     while True:
         # read the vehicle attitude, this is mainly for altitude data
-        altitude = att_sub.recv_pyobj(flags=zmq.NOBLOCK)["altitude"]
+        try:
+            altitude = att_sub.recv_pyobj(flags=zmq.NOBLOCK)["altitude"]
+        except zmq.Again:
+            pass
 
         # setpoint is frdy
         # this flies the drone in a clockwise circle
