@@ -4,7 +4,6 @@ from pymavlink import mavutil
 
 
 vehicle = dronekit.connect("/dev/ttyACM0", wait_ready=True)
-vehicle.airspeed=3
 print("arming")
 vehicle.armed = True
 print("guiding")
