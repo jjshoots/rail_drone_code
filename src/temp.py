@@ -9,7 +9,7 @@ vehicle.armed = True
 print("guiding")
 vehicle.mode = dronekit.VehicleMode("GUIDED")
 vehicle.simple_takeoff(2.0)
-time.sleep(15)
+time.sleep(20)
 msg = vehicle.message_factory.set_position_target_local_ned_encode(
     0,       # time_boot_ms (not used)
     0, 0,    # target system, target component
