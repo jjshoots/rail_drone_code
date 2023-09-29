@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     # arm, takeoff
     drone.preflight_setup()
-    drone.takeoff()
+    drone.takeoff(2.0)
 
     # enable autonomous mode
     while input("Start autonomous? (y/n)") != "y":
