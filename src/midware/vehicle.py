@@ -266,10 +266,10 @@ class Vehicle:
             0,
             0,
             # frame
-            mavutil.mavlink.MAV_FRAME_BODY_FRD,
+            mavutil.mavlink.MAV_FRAME_BODY_OFFSET_NED,
             # type_mask, addressed in reversed, and used to indicate which components should be IGNORED
             # bit1:PosX, bit2:PosY, bit3:PosZ, bit4:VelX, bit5:VelY, bit6:VelZ, bit7:AccX, bit8:AccY, bit9:AccZ, bit11:yaw, bit12:yaw rate
-            0b011111000111,
+            0b010111000111,
             # x, y, z positions (not used)
             0,
             0,
