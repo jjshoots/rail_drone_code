@@ -161,7 +161,7 @@ class Vehicle:
             # start counting down if all checks pass
             print("")
             clear_time -= 1
-            if clear_time <= 1:
+            if clear_time < 4:
                 print(f"Takeover in... {clear_time}")
             if clear_time == 0:
                 break
