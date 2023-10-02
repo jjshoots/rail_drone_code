@@ -14,7 +14,7 @@ class Camera:
     def __init__(self, base_resize):
         self.base_resize = base_resize
 
-    @prefetch(max_prefetch=2)
+    # @prefetch(max_prefetch=2)
     def stream(self, device) -> Generator[torch.Tensor, None, None]:
         camera = cv2.VideoCapture(-1)
         print("Camera Initialized")
