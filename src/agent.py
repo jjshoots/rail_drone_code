@@ -1,8 +1,3 @@
-"""
-Supervisor level script for sending setpoints generated from the CVRL model.
-This script requires `main.py` to first be run in another process.
-"""
-
 from __future__ import annotations
 
 import os
@@ -11,7 +6,6 @@ import time
 
 import numpy as np
 import torch
-import zmq
 from wingman import Wingman, cpuize, gpuize
 
 from cv import EnsembleAttUNet
@@ -23,9 +17,6 @@ class Agent:
     """The CVRL agent.
 
     This script hosts the CV and RL models.
-    It continuously reads the camera image, and subscribes to the obs_att on port 5555.
-    It publishes the velocity setpoint on port 5556.
-    None of the functions are designed to be called after `start()`, which is a blocking loop.
     """
 
     def __init__(
@@ -44,30 +35,18 @@ class Agent:
         self.camera = Camera(self.cfg.base_resize)
 
         """RUNTIME PARAMETERS"""
-        self.last_zmq_update = 0.0
-        self.setpoint = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
+        self._last_attitude_time = time.time()
         self.obs_att = torch.zeros((1, 8), dtype=torch.float32, device=self.cfg.device)
         self.action = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
+        self.setpoint = np.zeros((4,), dtype=np.float32)
 
         """CONSTANTS"""
         self.action_scaling = np.array(
             [forward_velocity, max_drift_velocity, max_yaw_rate, max_climb_rate]
         )
 
-        """PYZMQ SOCKETS"""
-        # attitude subscriber
-        context = zmq.Context()
-        self.att_sub = context.socket(zmq.SUB)
-        self.att_sub.connect("tcp://127.0.0.1:5555")
-        self.att_sub.setsockopt_string(zmq.SUBSCRIBE, "")
-
-        # setpoint publisher
-        context = zmq.Context()
-        self.set_pub = context.socket(zmq.PUB)
-        self.set_pub.bind("tcp://127.0.0.1:5556")
-
-        """START THE ZMQ WATCHDOG"""
-        self._zmq_update_watcher()
+        self._stale_attitude_watcher()
+        self.start()
 
     def _setup_nets(self) -> tuple[EnsembleAttUNet, GaussianActor]:
         """_setup_nets.
@@ -118,64 +97,47 @@ class Agent:
 
         return cv_model, rl_model
 
-    def _update_obs_att(self) -> None:
-        """Reads the vehicle attitude from ZMQ and converts it into a form that's compatible with the RL alg."""
+    def update_attitude(self, attitude: dict) -> None:
+        """Updates the internal attitude."""
         # check whether we have state update
-        try:
-            attitude = self.att_sub.recv_pyobj(flags=zmq.NOBLOCK)
-            self.last_zmq_update = time.time()
-        except zmq.Again:
-            return
-
+        self._last_attitude_time = time.time()
         self.obs_att = torch.tensor(
             [[*attitude["lin_vel"], attitude["altitude"], *self.action]],
             device=self.cfg.device,
         )
-        return
 
-    def start(self) -> None:
-        """The main blocking loop."""
-        # start loop, just go as fast as possible for now
-        for cam_img in self.camera.stream(self.cfg.device):
-            # get the camera image and pass to segmentation model, already on gpu
-            seg_map, _ = self.cv_model(cam_img)
-            seg_map = seg_map.float()
+    def get_setpoint(self) -> np.ndarray:
+        """The main loop."""
+        # get the camera image and pass to segmentation model, already on gpu
+        seg_map, _ = self.cv_model(self.camera.get_image(self.cfg.device))
+        seg_map = seg_map.float()
 
-            # update the obs_att
-            self._update_obs_att()
+        # pass segmap to the rl model to get action, send to cpu
+        self.action = self.rl_model.infer(
+            *self.rl_model(self.obs_att, seg_map)
+        ).squeeze(0)
+        self.action = cpuize(self.action)
 
-            # pass segmap to the rl model to get action, send to cpu
-            self.action = self.rl_model.infer(
-                *self.rl_model(self.obs_att, seg_map)
-            ).squeeze(0)
-            self.action = cpuize(self.action)
+        # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
+        # the max linear velocity as defined in the sim is 3.0
+        # the max angular velocity as defined in the sim is pi
+        self.setpoint = np.array(
+            [self.action[0] > 0, -self.action[1], -self.action[3], -self.action[2]]
+        )
+        self.setpoint *= self.action_scaling
 
-            # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
-            # the max linear velocity as defined in the sim is 3.0
-            # the max angular velocity as defined in the sim is pi
-            self.setpoint = np.array(
-                [self.action[0] > 0, -self.action[1], -self.action[3], -self.action[2]]
-            )
-            self.setpoint *= self.action_scaling
+        return self.setpoint
 
-            # publish the setpoint
-            self.set_pub.send_pyobj(self.setpoint)
-
-    def _zmq_update_watcher(self) -> None:
-        """A watchdog for the ZMQ updates. Also periodically prints out the setpoint."""
+    def _stale_attitude_watcher(self) -> None:
+        """Watches for stale attitude."""
         print(f"Setpoint FRDY: {self.setpoint}")
 
         # check the zmq
-        stale_time = time.time() - self.last_zmq_update
+        stale_time = time.time() - self._last_attitude_time
         if stale_time > 3.0:
             print(f"Attitude estimate stale for {stale_time} seconds.")
 
         # queue the next call
-        t = threading.Timer(1.0, self._zmq_update_watcher)
+        t = threading.Timer(1.0, self._stale_attitude_watcher)
         t.daemon = True
         t.start()
-
-
-if __name__ == "__main__":
-    agent = Agent()
-    agent.start()

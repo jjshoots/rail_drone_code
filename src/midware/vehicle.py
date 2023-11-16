@@ -2,7 +2,6 @@ import threading
 import time
 
 import numpy as np
-import zmq
 from dronekit import VehicleMode, connect
 from pymavlink import mavutil
 
@@ -11,8 +10,6 @@ class Vehicle:
     """Vehicle.
 
     The vehicle interface.
-    It publishes the vehicle attitude on port 5555.
-    It subscribes get vehicle setpoints by subscribing to port 5556.
     """
 
     def __init__(
@@ -60,33 +57,17 @@ class Vehicle:
         """RUNTIME PARAMETERS"""
         # a flag on whether we are able to fly autonomously
         self.autonomous = False
-
-        # parameters for state
+        self._last_setpoint_time = time.time()
         self._state_call_time = time.time()
         self._prev_ang_pos = np.zeros((3,), dtype=np.float32)
         self.ang_vel = np.zeros((3,), dtype=np.float32)
         self.lin_vel = np.zeros((3,), dtype=np.float32)
-
-        # zmq last update
-        self.last_zmq_update = 0.0
-
-        """PYZMQ SOCKETS"""
-        # attitude publisher
         self.attitude = dict()
-        context = zmq.Context()
-        self.att_pub = context.socket(zmq.PUB)
-        self.att_pub.bind("tcp://127.0.0.1:5555")
-
-        # setpoint subscriber
-        context = zmq.Context()
-        self.set_sub = context.socket(zmq.SUB)
-        self.set_sub.connect("tcp://127.0.0.1:5556")
-        self.set_sub.setsockopt_string(zmq.SUBSCRIBE, "")
 
         """START DAEMONS"""
         self._state_update_daemon()
         self._send_setpoint_daemon()
-        self._zmq_update_watcher()
+        self._stale_setpoint_watcher()
 
         # some sleep helps
         time.sleep(1)
@@ -250,6 +231,7 @@ class Vehicle:
         Args:
             frdy (np.ndarray): frdy
         """
+        self._last_setpoint_time = time.time()
         setpoint = self.enu2ned(frdy)
 
         # check the flight ceiling, downward is positive
@@ -286,6 +268,9 @@ class Vehicle:
             0,
             setpoint[3],
         )
+
+    def get_attitude(self) -> dict:
+        return self.attitude
 
     def _state_update_daemon(self) -> None:
         """Updates state in a separate loop."""
@@ -332,7 +317,6 @@ class Vehicle:
         self.attitude["lin_vel"] = self.lin_vel
         self.attitude["ang_vel"] = self.lin_vel
         self.attitude["altitude"] = self.altitude
-        self.att_pub.send_pyobj(self.attitude)
 
         # queue the next call
         t = threading.Timer(self.state_update_period, self._state_update_daemon)
@@ -341,14 +325,6 @@ class Vehicle:
 
     def _send_setpoint_daemon(self) -> None:
         """Sends setpoints in a separate loop for autonomous mode."""
-        # update the setpoint if we have a message
-        try:
-            setpoint = self.set_sub.recv_pyobj(flags=zmq.NOBLOCK)
-            self.last_zmq_update = time.time()
-            self.update_velocity_setpoint(setpoint)
-        except zmq.Again:
-            pass
-
         # send the setpoint if autonomy is allowed
         if self.autonomous:
             self.vehicle.send_mavlink(self.setpoint_msg)
@@ -359,14 +335,14 @@ class Vehicle:
         t.daemon = True
         t.start()
 
-    def _zmq_update_watcher(self) -> None:
-        """A watchdog for the ZMQ updates. Resets the setpoint if stale."""
-        stale_time = time.time() - self.last_zmq_update
+    def _stale_setpoint_watcher(self) -> None:
+        """Watches for stale setpoints and whether to reset."""
+        stale_time = time.time() - self._last_setpoint_time
         if stale_time > 3.0:
             self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
             print(f"Setpoint update stale for {stale_time} seconds.")
 
         # queue the next call
-        t = threading.Timer(1.0, self._zmq_update_watcher)
+        t = threading.Timer(1.0, self._stale_setpoint_watcher)
         t.daemon = True
         t.start()

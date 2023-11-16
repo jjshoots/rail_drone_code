@@ -12,7 +12,7 @@ if __name__ == "__main__":
         "/dev/ttyACM0",
         state_update_rate=4,
         setpoint_update_rate=2,
-	flight_floor=1.0,
+        flight_floor=1.0,
         flight_ceiling=5.0,
     )
 

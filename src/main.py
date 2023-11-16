@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 
+from agent import Agent
 from midware.vehicle import Vehicle
 
 if __name__ == "__main__":
@@ -19,24 +20,11 @@ if __name__ == "__main__":
         flight_ceiling=4.0,
     )
 
-    # arm, takeoff
-    drone.preflight_setup()
-    drone.takeoff(2.0)
+    # initialize the agent
+    agent = Agent()
 
-    # enable autonomous mode
-    while input("Start autonomous? (y/n)") != "y":
-        pass
-    drone.enable_autonomous(True)
-
-    # now we wait for the terminate
-    print("Press Ctrl-C to terminate...")
-    try:
-        while True:
-            time.sleep(100)
-    except KeyboardInterrupt:
-        drone.enable_autonomous(False)
-
-    # check for land
-    while input("Land? (y/n)") != "y":
-        pass
-    drone.land()
+    # start sending setpoints
+    while True:
+        agent.update_attitude(drone.get_attitude())
+        drone.update_velocity_setpoint(agent.get_setpoint())
+        time.sleep(0.3)
