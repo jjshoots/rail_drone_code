@@ -6,11 +6,11 @@ import time
 
 import numpy as np
 import torch
+from CCGENet import GaussianActor
 from wingman import Wingman, cpuize, gpuize
 
 from cv import EnsembleAttUNet
 from midware import Camera
-from rl import GaussianActor
 
 
 class Agent:
