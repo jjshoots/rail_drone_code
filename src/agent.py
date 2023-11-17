@@ -46,7 +46,6 @@ class Agent:
         )
 
         self._stale_attitude_watcher()
-        self.start()
 
     def _setup_nets(self) -> tuple[EnsembleAttUNet, GaussianActor]:
         """_setup_nets.
