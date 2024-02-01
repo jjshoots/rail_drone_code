@@ -31,7 +31,7 @@ class Camera:
 
         print("Camera Initialized")
 
-    def get_image(self, device) -> torch.Tensor:
+    def get_image(self, device) -> torch.Tensor | np.ndarray:
         _, image = self.camera.read()
 
         # perform opencv formatting first

@@ -98,7 +98,6 @@ class Agent:
 
     def update_attitude(self, attitude: dict) -> None:
         """Updates the internal attitude."""
-        # check whether we have state update
         self._last_attitude_time = time.time()
         self.obs_att = torch.tensor(
             [[*attitude["lin_vel"], attitude["altitude"], *self.action]],

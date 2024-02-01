@@ -1,6 +1,5 @@
 """
-Middleware for all autonomous flights.
-This script is not meant to be run standalone and will fail if there are no setpoints.
+Main file for autonomous flights.
 """
 
 from __future__ import annotations
