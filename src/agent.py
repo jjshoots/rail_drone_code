@@ -19,13 +19,7 @@ class Agent:
     This script hosts the CV and RL models.
     """
 
-    def __init__(
-        self,
-        forward_velocity: float = 1.0,
-        max_drift_velocity: float = 2.0,
-        max_climb_rate: float = 2.0,
-        max_yaw_rate: float = 2.0,
-    ):
+    def __init__(self):
         """__init__."""
         self.wm = Wingman(config_yaml="src/settings.yaml")
         self.cfg = self.wm.cfg
@@ -39,11 +33,6 @@ class Agent:
         self.obs_att = torch.zeros((1, 8), dtype=torch.float32, device=self.cfg.device)
         self.action = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
         self.setpoint = np.zeros((4,), dtype=np.float32)
-
-        """CONSTANTS"""
-        self.action_scaling = np.array(
-            [forward_velocity, max_drift_velocity, max_yaw_rate, max_climb_rate]
-        )
 
         self._stale_attitude_watcher()
 
@@ -116,13 +105,15 @@ class Agent:
         ).squeeze(0)
         self.action = cpuize(self.action)
 
-        # map action, [stop/go, right_drift, yaw_rate, climb_rate] -> [frdy]
+        # we want to maintain a height of 1 m, down is +velocity
+        climb_rate = -(1.0 - self.obs_att[3]) * 0.5
+
+        # map action, [stop/go, yaw_rate] -> [frdy]
         # the max linear velocity as defined in the sim is 3.0
         # the max angular velocity as defined in the sim is pi
         self.setpoint = np.array(
-            [self.action[0] > 0, -self.action[1], -self.action[3], -self.action[2]]
+            [self.action[0] > 0, 0.0, climb_rate, self.action[1]]
         )
-        self.setpoint *= self.action_scaling
 
         return self.setpoint
 
