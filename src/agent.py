@@ -56,8 +56,7 @@ class Agent:
 
         rl_model = GaussianActor(
             act_size=self.cfg.act_size,
-            obs_att_size=self.cfg.obs_att_size,
-            obs_img_size=self.cfg.obs_img_size,
+            obs_size=self.cfg.obs_att_size,
         )
 
         # get weights for CV model
@@ -101,7 +100,7 @@ class Agent:
 
         # pass segmap to the rl model to get action, send to cpu
         self.action = self.rl_model.infer(
-            *self.rl_model(self.obs_att, seg_map)
+            *self.rl_model(seg_map)
         ).squeeze(0)
         self.action = cpuize(self.action)
 
