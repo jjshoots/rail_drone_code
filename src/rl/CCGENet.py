@@ -1,237 +1,177 @@
-import math
-from signal import SIGINT, signal
-
 import torch
-import torch.optim as optim
-from wingman import ReplayBuffer, Wingman, cpuize, gpuize, shutdown_handler
+import torch.distributions as dist
+import torch.nn as nn
+import torch.nn.functional as func
+from wingman import NeuralBlocks
 
-from algorithms import CCGE
-from rail_env import RailEnv
 
+class Backbone(nn.Module):
+    """Backbone Network and logic"""
 
-def train(wm: Wingman):
-    # grab config
-    cfg = wm.cfg
+    def __init__(self, embedding_size, obs_size):
+        super().__init__()
 
-    # setup env, model, replaybuffer
-    env = setup_env(wm)
-    model, optims = setup_nets(wm)
-    memory = ReplayBuffer(cfg.buffer_size)
-
-    wm.log["epoch"] = 0
-    wm.log["eval_perf"] = -math.inf
-    wm.log["max_eval_perf"] = -math.inf
-    wm.log["num_episodes"] = 0
-    next_eval_step = 0
-
-    while memory.count <= cfg.total_steps:
-        wm.log["epoch"] += 1
-
-        """EVALUATE POLICY"""
-        if memory.count >= next_eval_step:
-            next_eval_step = (
-                int(memory.count / cfg.eval_steps_ratio) + 1
-            ) * cfg.eval_steps_ratio
-            wm.log["eval_perf"] = env.evaluate(cfg, model)
-            wm.log["max_eval_perf"] = max(
-                [float(wm.log["max_eval_perf"]), float(wm.log["eval_perf"])]
-            )
-
-        """ENVIRONMENT ROLLOUT"""
-        env.reset()
-        model.eval()
-        model.zero_grad()
-
-        with torch.no_grad():
-            while not (env.ended):
-                # get the initial state and label
-                obs = env.obs
-                lbl = env.label
-
-                if memory.count < cfg.exploration_steps:
-                    act = env.env.action_space.sample()
-                else:
-                    # move observation to gpu
-                    t_obs = gpuize(obs, cfg.device).unsqueeze(0)
-
-                    # get the action from policy
-                    output = model.actor(t_obs)
-                    t_act, _ = model.actor.sample(*output)
-
-                    # move label to gpu
-                    t_lbl = gpuize(lbl, cfg.device).unsqueeze(0)
-
-                    # figure out whether to follow policy or oracle
-                    sup_scale, *_ = model.calc_sup_scale(t_obs, t_act, t_lbl)
-                    act = lbl if sup_scale.squeeze(0) == 1.0 else cpuize(t_act)
-
-                # get the next state and other stuff
-                next_obs, rew, term = env.step(act)
-
-                # store stuff in mem
-                memory.push(
-                    [
-                        obs,
-                        act,
-                        rew,
-                        next_obs,
-                        term,
-                        lbl,
-                    ],
-                    random_rollover=cfg.random_rollover,
-                )
-
-            # for logging
-            wm.log["num_episodes"] += 1
-            wm.log["total_reward"] = env.cumulative_reward
-
-        """TRAINING RUN"""
-        dataloader = torch.utils.data.DataLoader(
-            memory, batch_size=cfg.batch_size, shuffle=True, drop_last=False
+        # process the visual input
+        _channels_description = [obs_size[0], 16, 32, 64, embedding_size // 16]
+        _kernels_description = [3] * (len(_channels_description) - 1)
+        _pooling_description = [2] * (len(_channels_description) - 1)
+        _activation_description = ["relu"] * (len(_channels_description) - 1)
+        self.visual_net = NeuralBlocks.generate_conv_stack(
+            _channels_description,
+            _kernels_description,
+            _pooling_description,
+            _activation_description,
         )
 
-        for repeat_num in range(int(cfg.repeats_per_buffer)):
-            for batch_num, stuff in enumerate(dataloader):
-                model.train()
+    def forward(self, obs) -> torch.Tensor:
+        # normalize the observation image
+        obs = (obs - 0.5) * 2.0
 
-                obs = gpuize(stuff[0], cfg.device)
-                actions = gpuize(stuff[1], cfg.device)
-                rewards = gpuize(stuff[2], cfg.device)
-                next_obs = gpuize(stuff[3], cfg.device)
-                terms = gpuize(stuff[4], cfg.device)
-                labels = gpuize(stuff[5], cfg.device)
-
-                # train critic
-                for _ in range(cfg.critic_update_multiplier):
-                    model.zero_grad()
-                    q_loss, log = model.calc_critic_loss(
-                        obs,
-                        actions,
-                        rewards,
-                        next_obs,
-                        terms,
-                    )
-                    wm.log = {**wm.log, **log}
-                    q_loss.backward()
-                    optims["critic"].step()
-                    model.update_q_target()
-
-                # train actor
-                for _ in range(cfg.actor_update_multiplier):
-                    model.zero_grad()
-                    rnf_loss, log = model.calc_actor_loss(
-                        obs, terms, labels
-                    )
-                    wm.log = {**wm.log, **log}
-                    rnf_loss.backward()
-                    optims["actor"].step()
-
-                    # train entropy regularizer
-                    if model.use_entropy:
-                        model.zero_grad()
-                        ent_loss, log = model.calc_alpha_loss(obs)
-                        wm.log = {**wm.log, **log}
-                        ent_loss.backward()
-                        optims["alpha"].step()
-
-                """WANDB"""
-                wm.log["num_transitions"] = memory.count
-                wm.log["buffer_size"] = memory.__len__()
-
-                """WEIGHTS SAVING"""
-                to_update, model_file, optim_file = wm.checkpoint(
-                    loss=-float(wm.log["eval_perf"]), step=wm.log["num_transitions"]
-                )
-                if to_update:
-                    torch.save(model.state_dict(), model_file)
-
-                    optim_dict = dict()
-                    for key in optims:
-                        optim_dict[key] = optims[key].state_dict()
-                    torch.save(optim_dict, optim_file)
+        return self.visual_net(obs).view(*obs.shape[:-3], -1)
 
 
-def eval_display(wm: Wingman):
-    cfg = wm.cfg
-    env = setup_env(wm)
+class Critic(nn.Module):
+    """
+    Critic Network
+    """
 
-    if not cfg.debug:
-        model, _ = setup_nets(wm)
-    else:
-        model = None
+    def __init__(self, act_size, obs_size):
+        super().__init__()
 
-    if wm.cfg.display:
-        env.display(cfg, model)
-    elif wm.cfg.evaluate:
-        while True:
-            print("---------------------------")
-            print(env.evaluate(cfg, model))
-            print("---------------------------")
+        embedding_size = 256
 
+        self.backbone_net = Backbone(embedding_size, obs_size)
 
-def setup_env(wm: Wingman):
-    cfg = wm.cfg
-    env = RailEnv(cfg)
-    cfg.obs_size = env.obs_size
-    cfg.act_size = env.act_size
-
-    return env
-
-
-def setup_nets(wm: Wingman):
-    cfg = wm.cfg
-
-    # set up networks and optimizers
-    model = CCGE(
-        act_size=cfg.act_size,
-        obs_size=cfg.obs_size,
-        entropy_tuning=cfg.use_entropy,
-        target_entropy=cfg.target_entropy,
-        discount_factor=cfg.discount_factor,
-        confidence_lambda=cfg.confidence_lambda,
-    ).to(cfg.device)
-    actor_optim = optim.AdamW(
-        model.actor.parameters(), lr=cfg.learning_rate, amsgrad=True
-    )
-    critic_optim = optim.AdamW(
-        model.critic.parameters(), lr=cfg.learning_rate, amsgrad=True
-    )
-    alpha_optim = optim.AdamW([model.log_alpha], lr=0.01, amsgrad=True)
-
-    optims = dict()
-    optims["actor"] = actor_optim
-    optims["critic"] = critic_optim
-    optims["alpha"] = alpha_optim
-
-    # get latest weight files
-    has_weights, model_file, optim_file = wm.get_weight_files()
-    if has_weights:
-        # load the model
-        model.load_state_dict(
-            torch.load(model_file, map_location=torch.device(cfg.device))
+        # gets embeddings from actions
+        _features_description = [act_size, embedding_size]
+        _activation_description = ["relu"] * (len(_features_description) - 1)
+        self.action_net = NeuralBlocks.generate_linear_stack(
+            _features_description, _activation_description
         )
 
-        # load the optimizer
-        checkpoint = torch.load(optim_file, map_location=torch.device(cfg.device))
+        # outputs the action after all the compute before it
+        _features_description = [
+            2 * embedding_size,
+            embedding_size,
+            2,
+        ]
+        _activation_description = ["relu"] * (len(_features_description) - 2) + [
+            "identity"
+        ]
+        self.merge_net = NeuralBlocks.generate_linear_stack(
+            _features_description, _activation_description
+        )
 
-        for opt_key in checkpoint:
-            optims[opt_key].load_state_dict(checkpoint[opt_key])
+        self.register_buffer("uncertainty_bias", torch.rand(1) * 100.0, persistent=True)
 
-    # torch.save(model.actor.net.state_dict(), "./wing.pth")
-    # exit()
+    def forward(self, obs, actions):
+        # pass things through the backbone
+        img_output = self.backbone_net(obs)
 
-    return model, optims
+        # get the actions output
+        act_output = self.action_net(actions)
+
+        # process everything
+        output = torch.cat([img_output, act_output], dim=-1)
+        output = self.merge_net(output)
+
+        value, uncertainty = torch.split(output, 1, dim=-1)
+
+        uncertainty = func.softplus(uncertainty + self.uncertainty_bias)
+
+        return torch.stack((value, uncertainty), dim=0)
 
 
-if __name__ == "__main__":
-    signal(SIGINT, shutdown_handler)
-    wm = Wingman(config_yaml="./src/settings.yaml")
+class Q_Ensemble(nn.Module):
+    """
+    Q Network Ensembles with uncertainty estimates
+    """
 
-    """ SCRIPTS HERE """
+    def __init__(self, act_size, obs_size, num_networks=2):
+        super().__init__()
 
-    if wm.cfg.train:
-        train(wm)
-    elif wm.cfg.display or wm.cfg.evaluate:
-        eval_display(wm)
-    else:
-        print("Guess this is life now.")
+        networks = [
+            Critic(act_size, obs_size) for _ in range(num_networks)
+        ]
+        self.networks = nn.ModuleList(networks)
+
+    def forward(self, obs, actions):
+        """
+        obs is of shape B x input_shape
+        actions is of shape B x act_size
+        output is a tuple of 2 x B x num_networks
+        """
+        output = []
+        for network in self.networks:
+            output.append(network(obs, actions))
+
+        output = torch.cat(output, dim=-1)
+
+        return output
+
+
+class GaussianActor(nn.Module):
+    """
+    Actor network
+    """
+
+    def __init__(self, act_size, obs_size):
+        super().__init__()
+
+        self.act_size = act_size
+        embedding_size = 128
+
+        self.backbone_net = Backbone(embedding_size, obs_size)
+
+        # outputs the action after all the compute before it
+        _features_description = [
+            embedding_size,
+            embedding_size,
+            act_size * 2,
+        ]
+        _activation_description = ["relu"] * (len(_features_description) - 2) + [
+            "identity"
+        ]
+        self.merge_net = NeuralBlocks.generate_linear_stack(
+            _features_description, _activation_description
+        )
+
+    def forward(self, obs):
+        """
+        input:
+            obs of shape B x C x H x W
+        output:
+            tensor of shape [2, B, *action_size] for mu and sigma
+        """
+        # pass things through the backbone
+        output = (
+            self.merge_net(self.backbone_net(obs))
+            .reshape(obs.shape[0], 2, self.act_size)
+            .moveaxis(-2, 0)
+        )
+
+        return output
+
+    @staticmethod
+    def sample(mu, sigma):
+        """
+        output:
+            actions is of shape B x act_size
+            entropies is of shape B x 1
+        """
+        # lower bound sigma and bias it
+        normals = dist.Normal(mu, func.softplus(sigma) + 1e-6)
+
+        # sample from dist
+        mu_samples = normals.rsample()
+        actions = torch.tanh(mu_samples)
+
+        # calculate log_probs
+        log_probs = normals.log_prob(mu_samples) - torch.log(1 - actions.pow(2) + 1e-6)
+        log_probs = log_probs.sum(dim=-1, keepdim=True)
+
+        return actions, log_probs
+
+    @staticmethod
+    def infer(mu, sigma):
+        return torch.tanh(mu)
