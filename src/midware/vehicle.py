@@ -269,9 +269,6 @@ class Vehicle:
             setpoint[3],
         )
 
-    def get_attitude(self) -> dict:
-        return self.attitude
-
     def _state_update_daemon(self) -> None:
         """Updates state in a separate loop."""
         # record the current time

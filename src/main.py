@@ -25,6 +25,6 @@ if __name__ == "__main__":
 
     # start sending setpoints
     while True:
-        agent.update_attitude(drone.get_attitude())
+        agent.update_attitude(drone.attitude)
         drone.update_velocity_setpoint(agent.get_setpoint())
         time.sleep(0.3)
