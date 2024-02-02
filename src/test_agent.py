@@ -23,17 +23,11 @@ class Agent:
     """The CVRL agent.
 
     This script hosts the CV and RL models.
-    It continuously reads the camera image, and subscribes to the obs_att on port 5555.
-    It publishes the velocity setpoint on port 5556.
-    None of the functions are designed to be called after `start()`, which is a blocking loop.
+    It continuously reads the camera image, and outputs the action.
     """
 
     def __init__(
         self,
-        forward_velocity: float = 1.0,
-        max_drift_velocity: float = 2.0,
-        max_climb_rate: float = 2.0,
-        max_yaw_rate: float = 2.0,
     ):
         """__init__."""
         self.wm = Wingman(config_yaml="src/settings.yaml")
@@ -43,15 +37,9 @@ class Agent:
         self.cv_model, self.rl_model = self._setup_nets()
 
         """RUNTIME PARAMETERS"""
-        self.last_zmq_update = 0.0
         self.setpoint = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
         self.obs_att = torch.zeros((1, 8), dtype=torch.float32, device=self.cfg.device)
         self.action = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
-
-        """CONSTANTS"""
-        self.action_scaling = np.array(
-            [forward_velocity, max_drift_velocity, max_climb_rate, max_yaw_rate]
-        )
 
     def _setup_nets(self) -> tuple[EnsembleAttUNet, GaussianActor]:
         """_setup_nets.
@@ -73,8 +61,7 @@ class Agent:
 
         rl_model = GaussianActor(
             act_size=self.cfg.act_size,
-            obs_att_size=self.cfg.obs_att_size,
-            obs_img_size=self.cfg.obs_img_size,
+            obs_size=self.cfg.obs_size,
         )
 
         # get weights for CV model
@@ -84,13 +71,9 @@ class Agent:
         )
 
         # get weights for RL model
-        rl_state_dict = rl_model.state_dict()
-        for name, param in torch.load(
-            os.path.join(file_path, "../rl_weights.pth")
-        ).items():
-            if "actor." not in name:
-                continue
-            rl_state_dict[name.replace("actor.", "")].copy_(param)
+        rl_model.load_state_dict(
+            torch.load(os.path.join(file_path, "../rl_weights.pth"))
+        )
 
         # to eval mode
         cv_model.eval()
@@ -107,7 +90,7 @@ class Agent:
         self.obs_att -= 0.5 * 0.5
         self.obs_att[:, 3] = 1.0
 
-    def read_image(self) -> Generator[torch.Tensor | np.ndarray, None, None]:
+    def read_images(self) -> Generator[torch.Tensor | np.ndarray, None, None]:
         file_path = os.path.dirname(os.path.realpath(__file__))
         images_path = os.path.join(
             file_path, "../../active_learning/datasets/RailwayCVRLV0/train/images"
@@ -129,9 +112,9 @@ class Agent:
             yield image
 
     def start(self) -> None:
-        """The main blocking loop."""
+        """The main loop."""
         # start loop, just go as fast as possible for now
-        for image in self.read_image():
+        for image in self.read_images():
             # get the camera image and pass to segmentation model, already on gpu
             seg_map, _ = self.cv_model(image)
             seg_map = seg_map.float()
@@ -141,17 +124,17 @@ class Agent:
 
             # pass segmap to the rl model to get action, send to cpu
             self.action = self.rl_model.infer(
-                *self.rl_model(self.obs_att, seg_map)
+                *self.rl_model(seg_map)
             ).squeeze(0)
+            print(self.action)
             self.action = cpuize(self.action)
 
-            # map action, [stop/go, left_drift, yaw_rate, climb_rate] -> [frdy]
+            # map action, [stop/go, yaw_rate] -> [frdy]
             # the max linear velocity as defined in the sim is 3.0
             # the max angular velocity as defined in the sim is pi
             self.setpoint = np.array(
-                [self.action[0] > 0, -self.action[1], -self.action[3], -self.action[2]]
+                [self.action[0] > 0, 0.0, 0.0, self.action[1]]
             )
-            self.setpoint *= self.action_scaling
 
             print(f"FRDY: {self.setpoint}")
 

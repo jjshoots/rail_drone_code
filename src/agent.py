@@ -56,7 +56,7 @@ class Agent:
 
         rl_model = GaussianActor(
             act_size=self.cfg.act_size,
-            obs_size=self.cfg.obs_att_size,
+            obs_size=self.cfg.obs_size,
         )
 
         # get weights for CV model
