@@ -21,6 +21,7 @@ if __name__ == "__main__":
 
     # initialize the agent
     agent = Agent()
+    drone.enable_autonomous(True)
 
     # start sending setpoints
     while True:
