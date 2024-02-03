@@ -21,10 +21,10 @@ if __name__ == "__main__":
 
     # initialize the agent
     agent = Agent()
-    drone.enable_autonomous(True)
+    agent.setup()
 
     # start sending setpoints
     while True:
-        agent.update_attitude(drone.attitude)
-        drone.update_velocity_setpoint(agent.get_setpoint())
+        agent.set_attitude(drone.attitude)
+        drone.set_setpoint(agent.get_setpoint())
         time.sleep(0.3)

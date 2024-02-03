@@ -12,83 +12,19 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from wingman import Wingman, cpuize, gpuize
+from wingman import cpuize, gpuize
 
-from cv import EnsembleAttUNet
+from agent import Agent
 from midware import Camera
-from rl import GaussianActor
 
 
-class Agent:
-    """The CVRL agent.
+class TestAgent(Agent):
+    """The CVRL agent for local testing without camera."""
 
-    This script hosts the CV and RL models.
-    It continuously reads the camera image, and outputs the action.
-    """
-
-    def __init__(
-        self,
-    ):
+    def __init__(self):
         """__init__."""
-        self.wm = Wingman(config_yaml="src/settings.yaml")
-        self.cfg = self.wm.cfg
-
-        """MODELS AND CAMERA"""
-        self.cv_model, self.rl_model = self._setup_nets()
-
-        """RUNTIME PARAMETERS"""
-        self.setpoint = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
-        self.obs_att = torch.zeros((1, 8), dtype=torch.float32, device=self.cfg.device)
-        self.action = torch.zeros((4,), dtype=torch.float32, device=self.cfg.device)
-
-    def _setup_nets(self) -> tuple[EnsembleAttUNet, GaussianActor]:
-        """_setup_nets.
-
-        Args:
-
-        Returns:
-            tuple[EnsembleAttUNet, GaussianActor]:
-        """
-        # cfg up networks
-        cv_model = EnsembleAttUNet(
-            in_channels=self.cfg.in_channels,
-            out_channels=self.cfg.num_labels,
-            inner_channels=self.cfg.inner_channels,
-            att_num_heads=self.cfg.att_num_heads,
-            num_att_module=self.cfg.num_att_module,
-            num_ensemble=self.cfg.num_ensemble,
-        ).to(self.cfg.device)
-
-        rl_model = GaussianActor(
-            act_size=self.cfg.act_size,
-            obs_size=self.cfg.obs_size,
-        )
-
-        # get weights for CV model
-        file_path = os.path.dirname(os.path.realpath(__file__))
-        cv_model.load_state_dict(
-            torch.load(os.path.join(file_path, "../cv_weights.pth"))
-        )
-
-        # get weights for RL model
-        rl_model.load_state_dict(
-            torch.load(os.path.join(file_path, "../rl_weights.pth"))
-        )
-
-        # to eval mode
-        cv_model.eval()
-        rl_model.eval()
-
-        # to gpu
-        cv_model.to(self.cfg.device)
-        rl_model.to(self.cfg.device)
-
-        return cv_model, rl_model
-
-    def _update_obs_att(self) -> None:
-        self.obs_att = torch.rand((1, 8), dtype=torch.float32, device=self.cfg.device)
-        self.obs_att -= 0.5 * 0.5
-        self.obs_att[:, 3] = 1.0
+        super().__init__()
+        self._setup_nets()
 
     def read_images(self) -> Generator[torch.Tensor | np.ndarray, None, None]:
         file_path = os.path.dirname(os.path.realpath(__file__))
@@ -117,24 +53,19 @@ class Agent:
         for image in self.read_images():
             # get the camera image and pass to segmentation model, already on gpu
             seg_map, _ = self.cv_model(image)
-            seg_map = seg_map.float()
 
-            # update the obs_att
-            self._update_obs_att()
+            # mean filter the segmap to remove spurious predictions
+            seg_map = (self.mean_filter(seg_map.float()) == 1.0).float()
 
             # pass segmap to the rl model to get action, send to cpu
-            self.action = self.rl_model.infer(
-                *self.rl_model(seg_map)
-            ).squeeze(0)
-            print(self.action)
+            self.action = self.rl_model.infer(*self.rl_model(seg_map)).squeeze(0)
             self.action = cpuize(self.action)
+            print(self.action)
 
             # map action, [stop/go, yaw_rate] -> [frdy]
             # the max linear velocity as defined in the sim is 3.0
             # the max angular velocity as defined in the sim is pi
-            self.setpoint = np.array(
-                [self.action[0] > 0, 0.0, 0.0, self.action[1]]
-            )
+            self.setpoint = np.array([self.action[0] > 0, 0.0, 0.0, self.action[1]])
 
             print(f"FRDY: {self.setpoint}")
 
@@ -144,5 +75,5 @@ class Agent:
 
 
 if __name__ == "__main__":
-    agent = Agent()
+    agent = TestAgent()
     agent.start()

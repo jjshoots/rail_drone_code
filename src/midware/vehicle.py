@@ -55,8 +55,6 @@ class Vehicle:
         self.base_checks()
 
         """RUNTIME PARAMETERS"""
-        # a flag on whether we are able to fly autonomously
-        self.autonomous = False
         self._last_setpoint_time = time.time()
         self._state_call_time = time.time()
         self._prev_ang_pos = np.zeros((3,), dtype=np.float32)
@@ -108,124 +106,7 @@ class Vehicle:
         print(f"Armed: {self.vehicle.armed}")
         print("-----------------------------------------")
 
-    def preflight_setup(self) -> None:
-        """Sets the drone to guided mode."""
-        print("Preflight: Performing pre-arm checks...\n")
-
-        while self.vehicle.mode.name == "INITIALISING":
-            print("Preflight: Waiting for vehicle to initialise...")
-            time.sleep(1)
-
-        # preflight checks
-        clear_time = 5
-        while True:
-            time.sleep(1)
-
-            # check GPS sanity
-            if not self.vehicle.gps_0.fix_type or self.vehicle.gps_0.fix_type < 4:
-                print(f"Preflight: Waiting for GPS... {self.vehicle.gps_0}")
-                clear_time = 5
-
-            # check that vehicle is armed and ready to go
-            if not self.vehicle.armed:
-                print(
-                    f"Preflight: Vehicle not armed, please arm manually. Waiting for arming..."
-                )
-                clear_time = 5
-
-            if self.vehicle.mode.name != "GUIDED":
-                print(
-                    f"Preflight: Please set to GUIDED mode manually. Waiting for mode change..."
-                )
-                clear_time = 5
-
-            # start counting down if all checks pass
-            print("")
-            clear_time -= 1
-            if clear_time < 4:
-                print(f"Takeover in... {clear_time}")
-            if clear_time == 0:
-                break
-
-        print("\nPreflight: Ready to rock and roll!")
-        print("-----------------------------------------")
-
-    def enable_autonomous(self, enable: bool) -> None:
-        """Enables autonomous flight.
-
-        Args:
-
-        Returns:
-            None:
-        """
-        self.autonomous = enable
-
-        if not enable:
-            self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
-
-    def takeoff(self, target_height: float = 1.5) -> None:
-        """Sends the drone to a hover position.
-
-        Args:
-            height (float): height
-        """
-        if not self.vehicle.armed:
-            print("Vehicle is not armed, unable to perform auto-takeoff! Disarming!")
-            self.vehicle.armed = False
-            return
-        if self.vehicle.mode.name != "GUIDED":
-            print(
-                "Mode is not set to GUIDED, unable to perform auto-takeoff! Disarming!"
-            )
-            self.vehicle.armed = False
-            return
-
-        # run the takeoff command
-        self.vehicle.simple_takeoff(target_height)
-
-        # check that the drone has actually reached a stable hover
-        # we must maintain a stable hover for 3 seconds before we move on
-        step_count = 0
-        heights = np.zeros((3,), dtype=np.float32)
-        while True:
-            # treat the numpy array as a deque of sorts
-            heights[
-                step_count % heights.shape[0]
-            ] = self.vehicle.location.global_relative_frame.alt
-            step_count += 1
-
-            # if we've maintained with 5% of the target height for 3 seconds, break
-            if abs(np.mean(heights) - target_height) < abs(target_height) * 0.05:
-                break
-
-            # otherwise just wait
-            time.sleep(1)
-
-    def land(self) -> None:
-        """land.
-
-        Args:
-
-        Returns:
-            None:
-        """
-        # zero everything, disable autonomous mode
-        self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
-        self.autonomous = False
-
-        # send a land command
-        self.vehicle.mode = VehicleMode("LAND")
-
-        # check that the drone has indeed landed
-        while True:
-            height = self.vehicle.location.global_relative_frame.alt
-            if height is not None and height < 0.5:
-                break
-
-            # otherwise just wait
-            time.sleep(1)
-
-    def update_velocity_setpoint(self, frdy: np.ndarray) -> None:
+    def set_setpoint(self, frdy: np.ndarray) -> None:
         """Sets a new velocity setpoint.
 
         Args:
@@ -323,9 +204,8 @@ class Vehicle:
     def _send_setpoint_daemon(self) -> None:
         """Sends setpoints in a separate loop for autonomous mode."""
         # send the setpoint if autonomy is allowed
-        if self.autonomous:
-            self.vehicle.send_mavlink(self.setpoint_msg)
-            print(self.setpoint_msg)
+        self.vehicle.send_mavlink(self.setpoint_msg)
+        print(self.setpoint_msg)
 
         # queue the next call
         t = threading.Timer(self.setpoint_update_period, self._send_setpoint_daemon)
@@ -336,7 +216,7 @@ class Vehicle:
         """Watches for stale setpoints and whether to reset."""
         stale_time = time.time() - self._last_setpoint_time
         if stale_time > 3.0:
-            self.update_velocity_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
+            self.set_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
             print(f"Setpoint update stale for {stale_time} seconds.")
 
         # queue the next call
