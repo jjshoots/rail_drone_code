@@ -8,7 +8,7 @@ num_att_module: 1
 num_ensemble: 1
 
 # rl network parameters
-act_size: 2
+act_size: 1
 obs_size: [2, 64, 64]
 
 # wingman required params

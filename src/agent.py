@@ -100,7 +100,7 @@ class Agent:
         # map action, [stop/go, yaw_rate] -> [frdy]
         # the max linear velocity as defined in the sim is 3.0
         # the max angular velocity as defined in the sim is pi
-        setpoint = np.array([action[0] > 0, 0.0, climb_rate, action[1]])
+        setpoint = np.array([1.0, 0.0, climb_rate, action[0]])
 
         return setpoint
 
