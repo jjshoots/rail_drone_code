@@ -9,7 +9,6 @@ import torch
 from wingman import Wingman, cpuize, gpuize
 
 from cv import EnsembleAttUNet
-from cv.mean_filter import MeanFilter
 from midware import Camera
 from rl import GaussianActor
 
@@ -51,7 +50,6 @@ class Agent:
             num_att_module=self.cfg.num_att_module,
             num_ensemble=self.cfg.num_ensemble,
         ).to(self.cfg.device)
-        self.mean_filter = MeanFilter()
         self.rl_model = GaussianActor(
             act_size=self.cfg.act_size,
             obs_size=self.cfg.obs_size,
@@ -60,7 +58,7 @@ class Agent:
         # get weights for CV and RL model
         self.cv_model.load_state_dict(
             torch.load(
-                path.join(path.dirname(path.realpath(__file__)), "../cv_weights2.pth")
+                path.join(path.dirname(path.realpath(__file__)), "../cv_weights.pth")
             )
         )
         self.rl_model.load_state_dict(
@@ -71,12 +69,10 @@ class Agent:
 
         # to eval mode
         self.cv_model.eval()
-        self.mean_filter.eval()
         self.rl_model.eval()
 
         # to gpu
         self.cv_model.to(self.cfg.device)
-        self.mean_filter.to(self.cfg.device)
         self.rl_model.to(self.cfg.device)
 
     def set_attitude(self, attitude: dict) -> None:
@@ -84,27 +80,23 @@ class Agent:
         self._last_attitude_time = time.time()
         self._current_attitude = np.array([*attitude["lin_vel"], attitude["altitude"]])
 
-    def get_setpoint(self) -> np.ndarray:
+    def get_setpoint(self, image: torch.Tensor | None) -> np.ndarray:
         """The main loop."""
+        # image is expected to be shape [1, 3, 64, 64]
         # get the camera image and pass to segmentation model, already on gpu
-        # mean filter the segmap to remove spurious predictions
         seg_map, _ = self.cv_model(self.camera.get_image(self.cfg.device))
-        seg_map = (self.mean_filter(seg_map.float()) == 1.0).float()
-        blank = torch.zeros_like(seg_map)
-
-
-        # blank because RL was trained with 2 channels
-        rl_input = torch.cat([seg_map, blank], dim=-3)
+        seg_map = (seg_map.float() == 1.0).float()
 
         # pass segmap to the rl model to get action, send to cpu
-        action = cpuize(self.rl_model.infer(*self.rl_model(rl_input)).squeeze(0))
+        action = self.rl_model.infer(*self.rl_model(seg_map)).squeeze(0)
+        action = cpuize(action)
 
         # we want to maintain a height of 1 m, down is +velocity
         climb_rate = -(1.0 - self._current_attitude[3]) * 0.5
 
         # map action, [stop/go, yaw_rate] -> [frdy]
-        # the max linear velocity as defined in the sim is 3.0
-        # the max angular velocity as defined in the sim is pi
+        # linear velocity in the sim is about 1.5
+        # yaw rate in the sim is about 1.5
         setpoint = np.array([1.0, 0.0, climb_rate, action[0]])
 
         return setpoint
