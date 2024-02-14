@@ -80,7 +80,7 @@ class Agent:
         self._last_attitude_time = time.time()
         self._current_attitude = np.array([*attitude["lin_vel"], attitude["altitude"]])
 
-    def get_setpoint(self, image: torch.Tensor | None) -> np.ndarray:
+    def get_setpoint(self) -> np.ndarray:
         """The main loop."""
         # image is expected to be shape [1, 3, 64, 64]
         # get the camera image and pass to segmentation model, already on gpu
