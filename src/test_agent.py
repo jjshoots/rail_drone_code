@@ -46,6 +46,7 @@ class TestAgent(Agent):
             image = image.unsqueeze(0)
 
             yield image
+            yield torch.flip(image, dims=[-1])
 
     def start(self) -> None:
         """The main loop."""
