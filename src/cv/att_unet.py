@@ -14,6 +14,7 @@ class EnsembleAttUNet(nn.Module):
         in_channels: int,
         out_channels: int,
         inner_channels: list[int],
+        activation: str,
         att_num_heads: int,
         num_att_module: int,
         num_ensemble: int,
@@ -24,6 +25,7 @@ class EnsembleAttUNet(nn.Module):
             in_channels (int): number of channels at the input
             out_channels (int): number of channels at the output
             inner_channels (list[int]): channel descriptions for the downsampling conv net
+            activation (str): activation used in all inner layers
             att_num_heads (int): number of attention heads per attention module
             num_att_module (int): number of attention modules per downscale
             num_ensemble (int): number of networks in the ensemble
@@ -36,6 +38,7 @@ class EnsembleAttUNet(nn.Module):
                     in_channels,
                     out_channels,
                     inner_channels,
+                    activation,
                     att_num_heads,
                     num_att_module,
                 )
@@ -70,7 +73,6 @@ class EnsembleAttUNet(nn.Module):
         self.mean_filter_kernel: torch.Tensor
 
     def forward(self, x):
-        # y here is [pos_neg, num_ensemble, B, C, H, W]
         y = torch.stack([f(x) for f in self.models], dim=1)
 
         if self.training:
@@ -105,6 +107,7 @@ class AttUNet(nn.Module):
         in_channels: int,
         out_channels: int,
         inner_channels: list[int],
+        activation: str,
         att_num_heads: int,
         num_att_module: int,
     ):
@@ -114,6 +117,7 @@ class AttUNet(nn.Module):
             in_channels (int): number of channels at the input
             out_channels (int): number of channels at the output
             inner_channels (list[int]): channel descriptions for the downsampling conv net
+            activation (str): activation used in all inner layers
             att_num_heads (int): number of attention heads per attention module
             num_att_module (int): number of attention modules per downscale
         """
@@ -133,8 +137,12 @@ class AttUNet(nn.Module):
 
         # dynamically allocate the down and up list
         for i in range(len(inner_channels) - 1):
-            self.down_list.append(Down(inner_channels[i], inner_channels[i + 1]))
-            self.up_list.append(Up(inner_channels[-i - 1], inner_channels[-i - 2]))
+            self.down_list.append(
+                Down(inner_channels[i], inner_channels[i + 1], activation)
+            )
+            self.up_list.append(
+                Up(inner_channels[-i - 1], inner_channels[-i - 2], activation)
+            )
 
         # init attention modules
         self.attention = nn.Sequential(
@@ -173,7 +181,7 @@ def Plain(in_channel, out_channel):
     )
 
 
-def Down(in_channel, out_channel):
+def Down(in_channel, out_channel, activation):
     """
     batchnorm -> conv -> activation -> maxpool
     downscales input by 2
@@ -181,24 +189,23 @@ def Down(in_channel, out_channel):
     channels = [in_channel, out_channel]
     kernels = [3]
     pooling = [2]
-    activation = ["tanh"] * len(kernels)
+    activation = [activation] * len(kernels)
 
     return NeuralBlocks.generate_conv_stack(
         channels, kernels, pooling, activation, norm="batch"
     )
 
 
-def Up(in_channel, out_channel):
+def Up(in_channel, out_channel, activation):
     """
     batchnorm -> deconv -> activation
     upscales input by 2
     """
-
     channels = [in_channel, out_channel]
     kernels = [4]
     padding = [1]
     stride = [2]
-    activation = ["tanh"] * len(kernels)
+    activation = [activation] * len(kernels)
 
     return NeuralBlocks.generate_deconv_stack(
         channels, kernels, padding, stride, activation, norm="batch"

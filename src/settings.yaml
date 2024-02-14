@@ -1,11 +1,13 @@
 # cv network parameters
 base_resize: [64, 64]
 in_channels: 3
-num_labels: 2
-inner_channels: [16, 16, 32, 64]
+num_labels: 1
+inner_channels: [8, 16, 32, 64]
+activation: "tanh"
 att_num_heads: 4
 num_att_module: 1
 num_ensemble: 1
+
 
 # rl network parameters
 act_size: 1

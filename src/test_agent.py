@@ -52,15 +52,18 @@ class TestAgent(Agent):
         # start loop, just go as fast as possible for now
         for image in self.read_images():
             # get the camera image and pass to segmentation model, already on gpu
-            seg_map, _ = self.cv_model(image)
-
             # mean filter the segmap to remove spurious predictions
-            seg_map = (self.mean_filter(seg_map.float()) == 1.0).float()
+            seg_map, _ = self.cv_model(image)
+            # seg_map = (self.mean_filter(seg_map.float()) == 1.0).float()
+            seg_map = (seg_map.float() == 1.0).float()
+            blank = torch.zeros_like(seg_map)
+
+            # blank because RL was trained with 2 channels
+            rl_input = torch.cat([seg_map, blank], dim=-3)
 
             # pass segmap to the rl model to get action, send to cpu
-            self.action = self.rl_model.infer(*self.rl_model(seg_map)).squeeze(0)
+            self.action = self.rl_model.infer(*self.rl_model(rl_input)).squeeze(0)
             self.action = cpuize(self.action)
-            print(self.action)
 
             # map action, [stop/go, yaw_rate] -> [frdy]
             # the max linear velocity as defined in the sim is 3.0
@@ -70,7 +73,7 @@ class TestAgent(Agent):
             print(f"FRDY: {self.setpoint}")
 
             # cv2.imshow("something", cpuize(((image + 1.0) / 2.0).squeeze()).transpose(1, 2, 0))
-            plt.imshow(cpuize(seg_map.squeeze()[0]))
+            plt.imshow(cpuize(seg_map.squeeze()))
             plt.show()
 
 

@@ -46,6 +46,7 @@ class Agent:
             in_channels=self.cfg.in_channels,
             out_channels=self.cfg.num_labels,
             inner_channels=self.cfg.inner_channels,
+            activation=self.cfg.activation,
             att_num_heads=self.cfg.att_num_heads,
             num_att_module=self.cfg.num_att_module,
             num_ensemble=self.cfg.num_ensemble,
@@ -59,7 +60,7 @@ class Agent:
         # get weights for CV and RL model
         self.cv_model.load_state_dict(
             torch.load(
-                path.join(path.dirname(path.realpath(__file__)), "../cv_weights.pth")
+                path.join(path.dirname(path.realpath(__file__)), "../cv_weights2.pth")
             )
         )
         self.rl_model.load_state_dict(
@@ -86,13 +87,17 @@ class Agent:
     def get_setpoint(self) -> np.ndarray:
         """The main loop."""
         # get the camera image and pass to segmentation model, already on gpu
-        seg_map, _ = self.cv_model(self.camera.get_image(self.cfg.device))
-
         # mean filter the segmap to remove spurious predictions
-        seg_map[0] = (self.mean_filter(seg_map[0].float()) == 1.0).float()
+        seg_map, _ = self.cv_model(self.camera.get_image(self.cfg.device))
+        seg_map = (self.mean_filter(seg_map.float()) == 1.0).float()
+        blank = torch.zeros_like(seg_map)
+
+
+        # blank because RL was trained with 2 channels
+        rl_input = torch.cat([seg_map, blank], dim=-3)
 
         # pass segmap to the rl model to get action, send to cpu
-        action = cpuize(self.rl_model.infer(*self.rl_model(seg_map)).squeeze(0))
+        action = cpuize(self.rl_model.infer(*self.rl_model(rl_input)).squeeze(0))
 
         # we want to maintain a height of 1 m, down is +velocity
         climb_rate = -(1.0 - self._current_attitude[3]) * 0.5
