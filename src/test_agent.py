@@ -65,7 +65,7 @@ class TestAgent(Agent):
             # map action, [stop/go, yaw_rate] -> [frdy]
             # the max linear velocity as defined in the sim is 3.0
             # the max angular velocity as defined in the sim is pi
-            self.setpoint = np.array([self.action[0] > 0, 0.0, 0.0, self.action[1]])
+            self.setpoint = np.array([1.0, 0.0, 0.0, self.action[0]])
 
             print(f"FRDY: {self.setpoint}")
 
