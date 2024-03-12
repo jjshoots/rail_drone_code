@@ -53,6 +53,7 @@ class Vehicle:
 
         # set to stabilized mode first, then get all parameters
         self.base_checks()
+        self.set_setpoint(np.array([0.0, 0.0, 0.0, 0.0]))
 
         """RUNTIME PARAMETERS"""
         self._last_setpoint_time = time.time()
