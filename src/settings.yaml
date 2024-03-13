@@ -1,3 +1,7 @@
+# agent parameters
+forward_velocity: 1.0
+climb_rate_gain: 0.5
+
 # cv network parameters
 base_resize: [64, 64]
 in_channels: 3
@@ -7,7 +11,6 @@ activation: "tanh"
 att_num_heads: 4
 num_att_module: 1
 num_ensemble: 1
-
 
 # rl network parameters
 act_size: 1

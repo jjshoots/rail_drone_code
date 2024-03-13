@@ -92,12 +92,12 @@ class Agent:
         action = cpuize(action)
 
         # we want to maintain a height of 1 m, down is +velocity
-        climb_rate = -(1.0 - self._current_attitude[3]) * 0.5
+        climb_rate = -(1.0 - self._current_attitude[3]) * self.cfg.climb_rate_gain
 
         # map action, [stop/go, yaw_rate] -> [frdy]
         # linear velocity in the sim is about 1.5
         # yaw rate in the sim is about 1.5
-        setpoint = np.array([1.0, 0.0, climb_rate, action[0]])
+        setpoint = np.array([self.cfg.forward_velocity, 0.0, climb_rate, action[0]])
 
         return setpoint
 
