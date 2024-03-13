@@ -116,7 +116,8 @@ class Vehicle:
         self._last_setpoint_time = time.time()
         setpoint = self.enu2ned(frdy)
 
-        # check the flight ceiling, downward is positive
+        # altitude check
+        # height upward is positive, setpoint downward is positive
         vehicle_height = self.vehicle.location.global_relative_frame.alt
         if vehicle_height > self.flight_ceiling:
             setpoint[2] = min(vehicle_height - self.flight_ceiling, 1.0)
