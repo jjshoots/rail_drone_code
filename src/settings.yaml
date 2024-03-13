@@ -1,5 +1,5 @@
 # agent parameters
-forward_velocity: 1.0
+forward_velocity: 0.0
 climb_rate_gain: 0.5
 
 # cv network parameters
